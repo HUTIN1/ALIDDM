@@ -1,34 +1,13 @@
-from operator import itemgetter
-import GlobVar as GV
-from utils import *
-from ALIDDM_utils import *
 
+from ALIDDM.py.Tools.utils import *
+from ALIDDM.py.Tools.ALIDDM_utils import *
 
-from torch.utils.data import Dataset
-import torch.nn as nn
-import numpy as np 
-import torchvision.models as models
 from pytorch3d.renderer import look_at_rotation
 import torch
-from monai.transforms import ToTensor
-from vtk.util.numpy_support import vtk_to_numpy
-from vtk.util.numpy_support import numpy_to_vtk
-import fly_by_features as fbf
-import json
-from collections import deque
-import statistics
+
 import matplotlib.pyplot as plt
 import math
-import os
-from torch.utils.tensorboard import SummaryWriter
-import torch.nn.functional as F
-import math
-import torch.optim as optim
-from pytorch3d.structures import Meshes
-from pytorch3d.renderer import TexturesVertex
-from tqdm.std import tqdm
-from statistics import mean
-import GlobVar as GV
+
 
 # icosahedron = CreateIcosahedron(1, 1)
 # sphere_points=[]
@@ -59,21 +38,25 @@ class Agent:
         self,
         renderer, 
         renderer2,
+        device,
+        camera_position,
         radius = 1,
-        verbose = True,
+        verbose = True
+
         ):
         super(Agent, self).__init__()
         self.renderer = renderer
         self.renderer2=renderer2
-        self.camera_points = torch.tensor(GV.CAMERA_POSITION).type(torch.float32).to(GV.DEVICE)
+        self.camera_points = torch.tensor(camera_position).type(torch.float32)
         self.scale = 0
         self.radius = radius
         self.verbose = verbose
+        self.device = device
 
 
     def position_agent(self, text, vert, label):
    
-        final_pos = torch.empty((0)).to(GV.DEVICE)
+        final_pos = torch.empty((0)).to(self.device)
         
         for mesh in range(len(text)):
             if int(label) in text[mesh]:
@@ -82,9 +65,9 @@ class Agent:
                 for index in index_pos_land:
                     lst_pos.append(vert[mesh][index])
                 position_agent = sum(lst_pos)/len(lst_pos)
-                final_pos = torch.cat((final_pos,position_agent.unsqueeze(0).to(GV.DEVICE)),dim=0)
+                final_pos = torch.cat((final_pos,position_agent.unsqueeze(0).to(self.device)),dim=0)
             else:
-                final_pos = torch.cat((final_pos,torch.zeros((1,3)).to(GV.DEVICE)),dim=0)
+                final_pos = torch.cat((final_pos,torch.zeros((1,3)).to(self.device)),dim=0)
         # print(final_pos.shape)
         self.positions = final_pos
         # print(self.positions)
@@ -92,22 +75,22 @@ class Agent:
 
     
     def GetView(self,meshes,rend=False):
-        spc = self.positions
-        img_lst = torch.empty((0)).to(GV.DEVICE)
+        spc = self.positions.to(self.device)
+        img_lst = torch.empty((0)).to(self.device)
         seuil = 0.5
 
         for sp in self.camera_points:
-            sp_i = sp*self.radius
+            sp_i = (sp*self.radius).to(self.device)
             # sp = sp.unsqueeze(0).repeat(self.batch_size,1)
             current_cam_pos = spc + sp_i
-            R = look_at_rotation(current_cam_pos, at=spc, device=GV.DEVICE)  # (1, 3, 3)
+            R = look_at_rotation(current_cam_pos, at=spc, device = self.device)  # (1, 3, 3)
             # print( 'R shape :',R.shape)
             # print(R)
-            T = -torch.bmm(R.transpose(1, 2), current_cam_pos[:, :, None])[:, :, 0]  # (1, 3)
+            T = -torch.bmm(R.transpose(1, 2), current_cam_pos[:, :, None])[:, :, 0].to(self.device)  # (1, 3)
 
             if rend:
                 renderer = self.renderer2
-                images = renderer(meshes_world=meshes.clone(), R=R, T=T.to(GV.DEVICE))
+                images = renderer(meshes_world=meshes.clone().to(self.device), R=R, T=T)
                 y = images[:,:,:,:-1]
 
                 # yd = torch.where(y[:,:,:,:]<=seuil,0.,0.)
@@ -121,11 +104,12 @@ class Agent:
               
             else:
                 renderer = self.renderer
-                images = self.renderer(meshes_world=meshes.clone(), R=R, T=T.to(GV.DEVICE))
+                images = self.renderer(meshes_world=meshes.clone().to(self.device), R=R, T=T)
                 images = images.permute(0,3,1,2)
                 images = images[:,:-1,:,:]
 
-                pix_to_face, zbuf, bary_coords, dists = self.renderer.rasterizer(meshes.clone())
+                fragments = self.renderer.rasterizer(meshes.clone().to(self.device))
+                zbuf = fragments.zbuf
                 zbuf = zbuf.permute(0, 3, 1, 2)
                 y = torch.cat([images, zbuf], dim=1)
 
@@ -136,21 +120,23 @@ class Agent:
     
     def get_view_rasterize(self,meshes):
         spc = self.positions
-        img_lst = torch.empty((0)).to(GV.DEVICE)
-        tens_pix_to_face = torch.empty((0)).to(GV.DEVICE)
+        img_lst = torch.empty((0)).to(self.device)
+        tens_pix_to_face = torch.empty((0)).to(self.device)
 
         for sp in self.camera_points:
             sp_i = sp*self.radius
             current_cam_pos = spc + sp_i
-            R = look_at_rotation(current_cam_pos, at=spc, device=GV.DEVICE)  # (1, 3, 3)
+            R = look_at_rotation(current_cam_pos, at=spc, device = self.device)  # (1, 3, 3)
             T = -torch.bmm(R.transpose(1, 2), current_cam_pos[:, :, None])[:, :, 0]  # (1, 3)
               
             renderer = self.renderer
-            images = renderer(meshes_world=meshes.clone(), R=R, T=T.to(GV.DEVICE))
+            images = renderer(meshes_world=meshes.clone(), R=R, T=T.to(self.device))
             images = images.permute(0,3,1,2)
             images = images[:,:-1,:,:]
 
-            pix_to_face, zbuf, bary_coords, dists = renderer.rasterizer(meshes.clone())
+            fragments = renderer.rasterizer(meshes.clone())
+            zbuf = fragments.zbuf
+            pix_to_face = fragments.pix_to_face
             zbuf = zbuf.permute(0, 3, 1, 2)
             y = torch.cat([images, zbuf], dim=1)
 

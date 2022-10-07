@@ -7,8 +7,20 @@ global DEVICE
 # DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-Lower = []
-Upper = []
+Lower = ['LL7O', 'LL7MB', 'LL7DB', 'LL6O', 'LL6MB', 'LL6DB', 'LL5O', 'LL5MB', 
+'LL5DB', 'LL4O', 'LL4MB', 'LL4DB', 'LL3O', 'LL3MB', 'LL3DB', 'LL2O', 'LL2MB',
+ 'LL2DB', 'LL1O', 'LL1MB', 'LL1DB', 'LR1O', 'LR1MB', 'LR1DB', 'LR2O', 'LR2MB', 
+ 'LR2DB', 'LR3O', 'LR3MD', 'LR3DB', 'LR4O', 'LR4MB', 'LR4DB', 'LR5O', 'LR5MB',
+  'LR5DB', 'LR6O', 'LR6MB', 'LR6DB', 'LR7O', 'LR7MB', 'LR7DB', 'LL7R', 'LL6R', 
+  'LL5R', 'LL4R', 'LL3R', 'LL2R', 'LL1R']
+
+Upper = ['UL7O', 'UL7MB', 'UL7DB', 'UL6O', 'UL6MB', 'UL6DB', 'UL5O', 'UL5MB', 
+'UL5DB', 'UL4O', 'UL4MB', 'UL4DB', 'UL3O', 'UL3MB', 'UL3DB', 'UL2O', 'UL2MB', 
+'UL2DB', 'UL1O', 'UL1MB', 'UL1DB', 'UR1O', 'UR1MB', 'UR1DB', 'UR2O', 'UR2MB', 
+'UR2DB', 'UR3O', 'UR3MD', 'UR3DB', 'UR4O', 'UR4MB', 'UR4DB', 'UR5O', 'UR5MB', 
+'UR5DB', 'UR6O', 'UR6MB', 'UR6DB', 'UR7O', 'UR7MB', 'UR7DB', 'UL7R', 'UL6R', 
+'UL5R', 'UL4R', 'UL3R', 'UL2R', 'UL1R']
+
 # ALL
 id_lst = range(1,43)
 # CUSTOM

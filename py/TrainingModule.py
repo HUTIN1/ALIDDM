@@ -30,9 +30,9 @@ class Model(pl.LightningModule):
 
 
         self.__model =  UNet(
-        spatial_dims=2,
-        in_channels=5,
-        out_channels=args.num_classes,
+        spatial_dims=2, #depthmap 2 dimension
+        in_channels=5,  #normal in rgb = 3 + segmentation +
+        out_channels=args.num_classes, #number label
         channels=(16, 32, 64, 128, 256, 512),
         strides=(2, 2, 2, 2, 2),
         num_res_units=4

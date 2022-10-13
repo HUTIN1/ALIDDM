@@ -10,10 +10,10 @@ from vtk import vtkMatrix4x4, vtkMatrix3x3, vtkPoints
 import torch
 import pandas as pd
 from GlobVar import SELECTED_JAW
-from ALIDDM.py.Tools.utils import ReadSurf
+from utils import ReadSurf
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 import numpy as np
-from ALIDDM.py.Tools.utils import(
+from utils import(
     PolyDataToTensors
 ) 
 from pytorch3d.renderer import (
@@ -33,7 +33,7 @@ from monai.transforms import (
 )
 import monai
 import torchvision.transforms as transforms
-from ALIDDM.py.Tools.shader import *
+from shader import *
 import utils
 from utils import GetColorArray
 
@@ -210,7 +210,7 @@ def FocusTeeth(surf,surf_property,number_teeth):
 
     mean, scale = MeanScale(verts = verts_crown)
     
-    return mean , scale , utils.GetUnitSurf(surf, mean, scale)
+    return mean , scale , utils.GetUnitSurf(surf, mean_arr= mean, scale_factor = 1/scale)
 
 
 

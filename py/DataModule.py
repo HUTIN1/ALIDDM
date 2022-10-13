@@ -113,6 +113,7 @@ class DatasetValidation(Dataset):
         if self.random:
             surf = utils.RandomRotation(surf)
         mean, scale, surf = FocusTeeth(surf,self.surf_property,id_teeth)
+        surf = ComputeNormals(surf) 
 
         return DecomposeSurf(surf,self.surf_property,idx,mean,scale,self.lst_landmarks)
 

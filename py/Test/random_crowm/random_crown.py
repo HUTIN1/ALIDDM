@@ -28,7 +28,8 @@ from random import choice
 
 
 
-path = '/Users/luciacev-admin/Desktop/ALIDDM/ALIDDM/random_crowm/T3_17_L_segmented.vtk'
+path = '/home/luciacev/Desktop/Project/ALIDDM/ALIDDM/py/Test/random_crowm/T3_17_L_segmented.vtk'
+
 
 surf = ReadSurf(path)
 
@@ -74,6 +75,7 @@ print(region_id.shape)
 crown_ids = torch.argwhere(region_id == tooth).reshape(-1)
 print(crown_ids.shape)
 verts_crown = verts[crown_ids]
+
 
 min_coord = torch.min(verts_crown, dim=0).values
 max_coord= torch.max(verts_crown, dim=0).values

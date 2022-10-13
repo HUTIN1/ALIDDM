@@ -2,21 +2,27 @@ from torch import tensor
 import torch
 from random import choice
 import numpy as np
-import ALIDDM.py.Tools.utils as utils
+
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 from monai.transforms import ToTensor
-from ALIDDM.py.Tools.ALIDDM_utils import FocusTeeth
+
+import os 
+import sys
+script_dir = os.path.dirname(__file__)
+mymodule_dir = os.path.join(script_dir,'Tools')
+sys.path.append(mymodule_dir)
+from ALIDDM_utils import FocusTeeth
+import utils
 
 
 
 class RandomPickTeethTransform:
 
     def __init__(self, surf_property, unique_ids=None):
-        self.surf_property = surf_property, 
+        self.surf_property = surf_property
         self.unique_ids = unique_ids
 
     def __call__(self, surf):
-
         region_id = tensor((vtk_to_numpy(surf.GetPointData().GetScalars(self.surf_property))),dtype=torch.int64)
 
         if self.unique_ids is None:

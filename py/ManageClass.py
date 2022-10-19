@@ -22,7 +22,7 @@ class RandomPickTeethTransform:
         self.surf_property = surf_property
         self.unique_ids = unique_ids
 
-    def __call__(self, surf):
+    def __call__(self, surf,MeanScale =False):
         region_id = tensor((vtk_to_numpy(surf.GetPointData().GetScalars(self.surf_property))),dtype=torch.int64)
 
         if self.unique_ids is None:
@@ -31,8 +31,10 @@ class RandomPickTeethTransform:
             unique_ids = self.unique_ids
 
         tooth = choice(unique_ids)
-        _ , _ , surf = FocusTeeth(surf,self.surf_property,tooth)
+        mean , scale , surf = FocusTeeth(surf,self.surf_property,tooth)
 
+        if MeanScale:
+            return mean,scale ,surf
 
         return surf
 

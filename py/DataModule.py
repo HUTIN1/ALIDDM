@@ -111,7 +111,7 @@ class DatasetValidation(Dataset):
         id_teeth = self.unique_ids[index_teeth]
         surf = ReadSurf(os.path.join(self.dataset_dir,self.df.iloc[idx]["surf"])) 
         if self.random:
-            surf = utils.RandomRotation(surf)
+            surf, angle ,vectorrotation = utils.RandomRotation(surf)
         mean, scale, surf = FocusTeeth(surf,self.surf_property,id_teeth)
         surf = ComputeNormals(surf) 
 

@@ -4,7 +4,7 @@ from ssl import VERIFY_X509_TRUSTED_FIRST
 from utils_crown import ReadSurf
 from pytorch3d.utils import ico_sphere
 from pytorch3d.renderer import (look_at_rotation, FoVPerspectiveCameras, RasterizationSettings,
- MeshRenderer, MeshRasterizer, SoftPhongShader,PointLights,TexturesVertex)
+ MeshRenderer, MeshRasterizer, SoftPhongShader,PointLights,TexturesVertex,AmbientLights,HardPhongShader)
 import torch
 from torch import device, tensor, float32
 from pytorch3d.structures import Meshes, Pointclouds
@@ -18,6 +18,8 @@ import plotly.express as px
 import pandas as pd
 import json
 from vtk import vtkMatrix4x4, vtkMatrix3x3
+from monai.networks.nets import UNet
+from monai.losses import DiceCELoss
 
 import os 
 import sys
@@ -28,66 +30,12 @@ import ManageClass  as MC
 from ALIDDM_utils import  MeanScale, isRotationMatrix, image_grid, ALIIOSRendering, numberTooth2Landmark
 from utils import GetColorArray, ComputeNormals, RandomRotation, GetTransform
 
+
+
 #TODO : ask juan about size of image torch.Size([32, 1, 224, 224, 1]),. why is not rgb?
-def arrayFromVTKMatrix(vmatrix):
-  """Return vtkMatrix4x4 or vtkMatrix3x3 elements as numpy array.
-  The returned array is just a copy and so any modification in the array will not affect the input matrix.
-  To set VTK matrix from a numpy array, use :py:meth:`vtkMatrixFromArray` or
-  :py:meth:`updateVTKMatrixFromArray`.
-  """
 
-  if isinstance(vmatrix, vtkMatrix4x4):
-    matrixSize = 4
-  elif isinstance(vmatrix, vtkMatrix3x3):
-    matrixSize = 3
-  else:
-    raise RuntimeError("Input must be vtk.vtkMatrix3x3 or vtk.vtkMatrix4x4")
-  narray = np.eye(matrixSize)
-  vmatrix.DeepCopy(narray.ravel(), vmatrix)
-  return narray
-
-def Downscale(pos_center,mean_arr,scale_factor):
-    landmarks_position = (pos_center - mean_arr) * scale_factor
-    return landmarks_position
-
-def get_landmarks_position(path, mean_arr, scale_factor, list_landmark, angle=False, vector=None):
-       
-        data = json.load(open(os.path.join(path)))
-        markups = data['markups']
-        landmarks_lst = markups[0]['controlPoints']
-
-        landmarks_position = np.zeros([len(list_landmark), 3])
-        # resc_landmarks_position = np.zeros([number_of_landmarks, 3])
-        for landmark in landmarks_lst:
-            label = landmark["label"]
-            if label in list_landmark:
-                landmarks_position[list_landmark.index(label)] = Downscale(landmark["position"],mean_arr,scale_factor)
-
-        landmarks_pos = np.array([np.append(pos,1) for pos in landmarks_position])
-        if angle:
-            transform = GetTransform(angle, vector)
-            transform_matrix = arrayFromVTKMatrix(transform.GetMatrix())
-            landmarks_pos = np.matmul(transform_matrix,landmarks_pos.T).T
-        return landmarks_pos[:, 0:3]
-
-def redpath(vertex,list_landmark_pos):
-    texture = torch.zeros_like(vertex.unsqueeze(0))
-    vertex = vertex.to(torch.float64)
-    radius = 0.02
-    for i, landmark_pos in enumerate(list_landmark_pos):
-
-        landmark_pos = tensor([landmark_pos])
-        distance = torch.cdist(landmark_pos,vertex,p=2)
-        minvalue = torch.min(distance)
-        distance = distance - minvalue
-        #print(min(distance,1))
-        index_pos_land = torch.nonzero((distance<radius),as_tuple=True)
-        for index in index_pos_land:
-            texture[0,index,i]=1
-
-    return texture
-
-
+dico = {0:[0,0,0],15:[10,0,0],16:[50,0,0],17:[100,0,0],18:[150,0,0],19:[200,0,0],20:[250,0,0],21:[0,50,0],22:[0,100,0],23:[0,150,0],24:[0,200,0],25:[0,250,0],
+26:[0,0,50],27:[0,0,100],28:[0,0,150],29:[0,0,200],30:[0,0,250],31:[50,100,200],32:[200,100,50],33:[50,50,50]}
 path = '/home/luciacev/Desktop/Project/ALIDDM/ALIDDM/py/Test/random_crowm/T3_17_L_segmented.vtk'
 path_ld ='/home/luciacev/Desktop/Project/ALIDDM/ALIDDM/py/Test/random_crowm/T3_17_L.json'
 image_size =224
@@ -103,23 +51,30 @@ mean, scale ,surf = randonteeth(surf,MeanScale=True)
 surf, angle ,vectorrotation = RandomRotation(surf)
 
 surf = ComputeNormals(surf) 
-landmark = numberTooth2Landmark(22)
-landmark_pos = get_landmarks_position(path_ld, mean, 1/scale, landmark, angle=angle, vector=vectorrotation)
 
-img_lst = torch.empty((0)).to(device1)
-
-cloud_landmark = Pointclouds([tensor(landmark_pos)])
 position_camera = ico_sphere(1).verts_packed() * float(1.1)
 # sphere = Pointclouds(points=[T])
 
 verts = tensor(vtk_to_numpy(surf.GetPoints().GetData()),dtype= float32)
 faces = tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:])
-texture = redpath(verts,landmark_pos[0:3])
+region_id = ToTensor(dtype=torch.int64)(vtk_to_numpy(surf.GetPointData().GetScalars(surf_property)))
 
-# color_normals = ToTensor(dtype=torch.float32, device = device1)(vtk_to_numpy(GetColorArray(surf, "Normals"))/255.0)
-# textures = TexturesVertex(verts_features=color_normals[None,:,:])
-textures=TexturesVertex(verts_features=texture)
-mesh = Meshes(verts=torch.unsqueeze(verts, dim=0), faces=torch.unsqueeze(faces, dim=0),textures=textures).to(device1)
+color_normals = ToTensor(dtype=torch.float32, device = device1)(vtk_to_numpy(GetColorArray(surf, "Normals"))/255.0)
+textures_normal = TexturesVertex(verts_features=color_normals[None,:,:])
+
+print("color_normals[None,:,:].size()",color_normals[None,:,:].size())
+print("region_id.size()",region_id.size())
+segmentation = torch.empty((0))
+for i in range(region_id.size()[0]):
+
+    segmentation = torch.cat((segmentation,tensor([dico[int(region_id[i].numpy())]])),dim=0)
+segmentation = segmentation.unsqueeze(0)
+print(segmentation.size())
+texture_segmentation = TexturesVertex(verts_features=segmentation.to(device1))
+
+mesh_normal = Meshes(verts=torch.unsqueeze(verts, dim=0), faces=torch.unsqueeze(faces, dim=0),textures=textures_normal).to(device1)
+mesh_segmentation = Meshes(verts=torch.unsqueeze(verts, dim=0), faces=torch.unsqueeze(faces, dim=0),textures=texture_segmentation).to(device1)
+
 
 
 img_lst = torch.empty((0)).to(device1)
@@ -131,9 +86,17 @@ image_size =224
 blur_radius = 0
 faces_per_pixel = 1
 a = ALIIOSRendering(image_size,blur_radius,faces_per_pixel,position_camera = position_camera, device=device1)
-mask_renderer = a.mask_renderer
-seuil =1
-renderer = mask_renderer
+
+faces_pid0 = faces[:,0:1]
+surf_point_data = surf.GetPointData().GetScalars(surf_property)
+
+surf_point_data = torch.tensor(vtk_to_numpy(surf_point_data)).to(torch.float32)            
+surf_point_data_faces = torch.take(surf_point_data, faces_pid0)            
+
+surf_point_data_faces[surf_point_data_faces==-1] = 33 
+YF = surf_point_data_faces.to(device1)
+
+
 
 # for i in range(42):
 #     image = surf2image(mesh,T,1)
@@ -141,46 +104,47 @@ renderer = mask_renderer
         # img_lst = torch.cat((img_lst,image.unsqueeze(0)),dim=0)
 index_image =[]
 
-img_lst = torch.empty((0)).to(device1)
-
+X = torch.empty((0)).to(device1)
+PF = torch.empty((0)).to(device1)
 T2 = torch.empty((0)).to(device1)
 R2 = torch.empty((0)).to(device1)
-for i , pc in enumerate(position_camera):
-            pc = pc.to(device1)
-            pc = pc.unsqueeze(0)
-            # sp = sp.unsqueeze(0).repeat(self.batch_size,1)
-            R = look_at_rotation(pc)  # (1, 3, 3)
+for ps in position_camera:
+
+            ps = ps.unsqueeze(0)
+            ps= ps.to(device1)
+
+            R = look_at_rotation(ps)  # (1, 3, 3)
             if not isRotationMatrix(R[0]): #Some of matrix rotation isnot matrix rotation
-                continue
+                    continue
             R = R.to(device1)
-            T = -torch.bmm(R.transpose(1, 2).to(device1), pc[:,:,None].to(device1))[:, :, 0].to(device1)  # (1, 3)
+            T = -torch.bmm(R.transpose(1, 2), ps[:,:,None])[:, :, 0].to(device1)  # (1, 3)
 
-            images = renderer(meshes_world=mesh.clone().to(device1), R=R, T=T)
-            y = images[:,:,:,:-1]
+            images = renderer(meshes_world=mesh_normal.clone().to(device1), R=R, T=T)
+        
+            fragments = renderer.rasterizer(mesh_normal.clone())
+            pix_to_face = fragments.pix_to_face
+            zbuf = fragments.zbuf
 
-            # yd = torch.where(y[:,:,:,:]<=seuil,0.,0.)
-            yr = torch.where(y[:,:,:,0]>seuil,1.,0.).unsqueeze(-1)
-            yg = torch.where(y[:,:,:,1]>seuil,2.,0.).unsqueeze(-1)
-            yb = torch.where(y[:,:,:,2]>seuil,3.,0.).unsqueeze(-1)
-
-            y = ( yr + yg + yb).to(torch.float32)
+            images = torch.cat([images[:,:,:,0:3], zbuf], dim=-1)
 
             
-            
-            index_image.append(i)
-
-
-
-            img_lst = torch.cat((img_lst,y.unsqueeze(0)),dim=0)
-            T2 = torch.cat((T2,pc),dim=0)
+            X = torch.cat((X,images.unsqueeze(0)),dim=0) # 4 channel = 3 rgb (normal) + deptmap
+            PF= torch.cat((PF,pix_to_face.unsqueeze(0)),dim=0)
+            T2 = torch.cat((T2,T),dim=0)
             R2 = torch.cat((R2,R),dim=0)
+PF = PF.to(torch.int64)
+YF = YF.to(torch.int64)
+print("YF.size()",YF.size())
+# PF = PF.permute(0,4,1,2,3)
+# PF = PF.squeeze(1)
+# print("YF.size()",YF.size())
+y = torch.take(YF, PF).to(torch.int64)*(PF >= 0)
+print("X.size()", X.size())
+print("PF.size()",PF.size())
+print("y.size()",y.size())
 
-
-print(img_lst.size())
 cameras = FoVPerspectiveCameras(device = device1,R=R2,T=T2)
-print('input.size()', img_lst.size())
-sphere = Pointclouds(points=[T2])
-print(verts.size())
+
 # for i in range(42):
 #     print(i)
 #     image = surf2image(surf)
@@ -193,8 +157,8 @@ print(verts.size())
 
 fig = plot_scene({
     "subplot1": {
-        "mounth": mesh,
-        'landmark': cloud_landmark
+        "mounth": mesh_segmentation,
+        "camera": cameras
     }}
 )
 
@@ -204,20 +168,26 @@ fig.show()
 
 # # print(image[0,...,:3] == image[1,...,:3])
 # # print(image.size())
-# image_grid(img_lst[...,:3].cpu().numpy(),rows=6,cols=7,rgb=True)
+# image_grid(output_display[...,0].cpu().numpy(),rows=6,cols=7)
+# image_grid(output_display[...,1].cpu().numpy(),rows=6,cols=7)
+# image_grid(output_display[...,2].cpu().numpy(),rows=6,cols=7)
 # # # plt.title('images with normal vector')
-# # image_grid(img_lst.cpu().numpy(),rows=3,cols=3,rgb=False)
-# # # plt.title("images with depth map")
+# image_grid(X[...,:3].cpu().numpy(),rows=6,cols=7)
+# image_grid(y[...].cpu().numpy(),rows=6,cols=7)
+# # # # plt.title("images with depth map")
 # plt.show()
 
 # # print(images[0,:,:,:3].size())
 # # plt.imshow(images[0,...,:3].cpu().numpy())
 # # plt.show()
 
-# # for i, image in enumerate(img_lst) :
-# #     print("image ",index_image[i])
-# #     plt.imshow(img_lst[i,0,...,:3].cpu().numpy())
-# #     plt.show()
+for i in range(y.size()[0]) :
+    print("y.unique()",y[i,0,...].unique())
+    plt.figure()
+    plt.imshow(X[i,0,...,:3].cpu().numpy())
+    plt.figure()
+    plt.imshow(y[i,0,...].cpu().numpy(),"flag")
+    plt.show()
 
 # # for i, image in enumerate(img_lst) :
 # #     print("image ",index_image[i])

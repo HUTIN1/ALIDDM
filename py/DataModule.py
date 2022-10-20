@@ -2,19 +2,10 @@ from operator import getitem
 from numpy.lib.twodim_base import _trilu_indices_form_dispatcher
 from torch.utils.data import Dataset
 import numpy as np
-import os
 import torch
 from torch import int64, float32, tensor
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
-from ALIDDM.py.Tools.ALIDDM_utils import FocusTeeth, MeanScale, DecomposeSurf
-from ALIDDM.py.Tools.utils import(
-    ReadSurf,
-    ScaleSurf,
-    RandomRotation,
-    ComputeNormals,
-    GetColorArray,
-    GetTransform
-)
+
 from monai.transforms import (
     ToTensor
 )
@@ -22,16 +13,26 @@ import pandas as pd
 import json
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence as pack_sequence, pad_packed_sequence as unpack_sequence
 
-from vtk import vtkMatrix4x4, vtkMatrix3x3, vtkPoints
 
-import ALIDDM.py.Tools.utils as utils
 from random import choice
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 from pytorch_lightning.callbacks import Callback
 from random import randint
+from pytorch3d.structures import Meshes
+from pytorch3d.renderer import TexturesVertex
 
-
+import os 
+import sys
+script_dir = os.path.dirname(__file__)
+mymodule_dir = os.path.join(script_dir,'Tools')
+sys.path.append(mymodule_dir)
+from ALIDDM_utils import FocusTeeth, MeanScale, DecomposeSurf, get_landmarks_position, RandomRotation, pos_landmard2texture, numberTooth2Landmark
+from utils import(
+    ReadSurf,
+    ComputeNormals,
+    GetColorArray
+)
 
 class TeethDataModule(pl.LightningDataModule):
     def __init__(self,df,dataset_dr,batch_size,device,jaw, num_workers = 4,
@@ -111,11 +112,34 @@ class DatasetValidation(Dataset):
         id_teeth = self.unique_ids[index_teeth]
         surf = ReadSurf(os.path.join(self.dataset_dir,self.df.iloc[idx]["surf"])) 
         if self.random:
-            surf, angle ,vectorrotation = utils.RandomRotation(surf)
+            surf, angle ,vectorrotation = RandomRotation(surf)
         mean, scale, surf = FocusTeeth(surf,self.surf_property,id_teeth)
         surf = ComputeNormals(surf) 
 
-        return DecomposeSurf(surf,self.surf_property,idx,mean,scale,self.lst_landmarks)
+        verts = ToTensor(dtype=torch.float32)(vtk_to_numpy(surf.GetPoints().GetData()))
+        faces = ToTensor(dtype=torch.int64)(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:])
+        list_landmark = numberTooth2Landmark(id_teeth)
+        pos_landmark = get_landmarks_position(dataset_dir = self.dataset_dir,df = self.df, idex = idx, mean_arr= mean, scale_factor = 1/scale ,lst_landmarks= list_landmark)
+        color_normals = ToTensor(dtype=torch.float32)(vtk_to_numpy(GetColorArray(surf, "Normals"))/255.0)
+        color_landmark = pos_landmard2texture(verts,pos_landmark)
+
+        texture_normal = TexturesVertex(verts_features=color_normals[None,:,:])
+        texture_landmarks = TexturesVertex(verts_features=color_landmark[None,:,:])
+        mesh_normal = Meshes(verts=torch.unsqueeze(verts, dim=0), faces=torch.unsqueeze(faces, dim=0),textures=texture_normal).to(self.device)
+        mesh_landmark = Meshes(verts=torch.unsqueeze(verts, dim=0), faces=torch.unsqueeze(faces, dim=0),textures=texture_landmarks).to(self.device)
+
+
+        faces_pid0 = faces[:,0:1]
+        surf_point_data = surf.GetPointData().GetScalars(self.surf_property)
+
+        surf_point_data = torch.tensor(vtk_to_numpy(surf_point_data)).to(torch.float32)            
+        surf_point_data_faces = torch.take(surf_point_data, faces_pid0)            
+
+        surf_point_data_faces[surf_point_data_faces==-1] = 33 
+        YF = surf_point_data_faces.to(self.device)
+        YF = YF.to(torch.int64)
+
+        return mesh_normal, mesh_landmark, YF
 
 
 

@@ -17,7 +17,7 @@ import numpy as np
 from pytorch3d.renderer import (
     FoVPerspectiveCameras,
     RasterizationSettings, MeshRenderer, MeshRasterizer,
-    HardPhongShader, PointLights,look_at_rotation
+    HardPhongShader, PointLights,look_at_rotation,AmbientLights
 )
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer import TexturesVertex,blending
@@ -239,18 +239,33 @@ def get_landmarks_position(dataset_dir,df,idx, mean_arr, scale_factor,lst_landma
         markups = data['markups']
         landmarks_lst = markups[0]['controlPoints']
 
-        lst_lm =  lst_landmarks
-        landmarks_position = np.zeros([len(lst_lm), 3])
+        landmarks_position = np.zeros([len(lst_landmarks), 3])
         # resc_landmarks_position = np.zeros([number_of_landmarks, 3])
         for landmark in landmarks_lst:
             label = landmark["label"]
-            if label in lst_lm:
-                landmarks_position[lst_lm.index(label)] = Downscale(landmark["position"],mean_arr,scale_factor)
+            if label in lst_landmarks:
+                landmarks_position[lst_landmarks.index(label)] = Downscale(landmark["position"],mean_arr,scale_factor)
 
         landmarks_pos = np.array([np.append(pos,1) for pos in landmarks_position])
         return landmarks_pos[:, 0:3]
 
 
+def pos_landmard2texture(vertex,list_landmark_pos):
+    texture = torch.zeros_like(vertex.unsqueeze(0))
+    vertex = vertex.to(torch.float64)
+    radius = 0.02
+    for i, landmark_pos in enumerate(list_landmark_pos):
+
+        landmark_pos = tensor([landmark_pos])
+        distance = torch.cdist(landmark_pos,vertex,p=2)
+        minvalue = torch.min(distance)
+        distance = distance - minvalue
+        #print(min(distance,1))
+        index_pos_land = torch.nonzero((distance<radius),as_tuple=True)
+        for index in index_pos_land:
+            texture[0,index,i]=255
+
+    return texture
 
 def arrayFromVTKMatrix(vmatrix):
   """Return vtkMatrix4x4 or vtkMatrix3x3 elements as numpy array.
@@ -317,7 +332,7 @@ def image_grid(
     A util function for plotting a grid of images.
 
     Args:
-        images: (N,1, H, W, 5) array of RGBA images
+        images: (N,1, H, W, M) array images
         rows: number of rows in the grid
         cols: number of columns in the grid
         fill: boolean indicating if the space between images should be filled
@@ -341,87 +356,9 @@ def image_grid(
     fig.subplots_adjust(left=bleed, bottom=bleed, right=(1 - bleed), top=(1 - bleed))
 
     for index ,ax in enumerate(axarr.ravel()):
+
         if index < images.shape[0]:
-            if rgb:
-                # only render RGB channels
-                ax.imshow(images[index,0,..., :3])
-            else:
-                # only render Depht map
-                ax.imshow(images[index,0,..., 4])
+            ax.imshow(images[index,0,...])
             if not show_axes:
                 ax.set_axis_off()
 
-class ALIIOSRendering:
-    def __init__(self,image_size,blur_radius,faces_per_pixel,device,position_camera):
-        self.image_size = image_size
-        self.blur_radius = blur_radius
-        self.faces_per_pixel = faces_per_pixel
-        self.device = device
-        self.position_camera = position_camera
-        #phong renderer is to get image with rgb (normal) + segmentation + deptmap 
-        self.phong_renderer , self.mask_renderer = self.setup()
-
-    def setup(self):
-
-        # cameras = FoVOrthographicCameras(znear=0.1,zfar = 10,device=device) # Initialize a ortho camera.
-
-        cameras = FoVPerspectiveCameras(znear=0.01,zfar = 10, fov= 90, device= self.device) # Initialize a perspective camera.
-
-        raster_settings = RasterizationSettings(        
-            image_size=self.image_size, 
-            blur_radius=self.blur_radius, 
-            faces_per_pixel=self.faces_per_pixel, 
-        )
-
-        lights = PointLights(device = self.device) # light in front of the object. 
-
-        rasterizer = MeshRasterizer(
-                cameras=cameras, 
-                raster_settings=raster_settings
-            )
-
-        b = blending.BlendParams(background_color=(0,0,0))
-        phong_renderer = MeshRenderer(
-            rasterizer=rasterizer,
-            shader=HardPhongShader( device = self.device ,cameras=cameras, lights=lights,blend_params=b)
-        )
-        mask_renderer = MeshRenderer(
-            rasterizer=rasterizer,
-            shader=MaskRenderer(device = self.device ,cameras=cameras, lights=lights,blend_params=b)
-        )
-        return phong_renderer,mask_renderer
-
-
-    def renderingNormalDeptmap(self,mesh,cam_display=False):
-        img_lst = torch.empty((0)).to(self.device)
-        if cam_display :
-            T2 = torch.empty((0)).to(self.device)
-            R2 = torch.empty((0)).to(self.device)
-        for  pc in self.position_camera:
-                    pc = pc.to(self.device)
-                    pc = pc.unsqueeze(0)
-                    # sp = sp.unsqueeze(0).repeat(self.batch_size,1)
-                    R = look_at_rotation(pc)  # (1, 3, 3)
-                    if not isRotationMatrix(R[0]): #Some of matrix rotation isnot matrix rotation
-                        continue
-                    R = R.to(self.device)
-                    T = -torch.bmm(R.transpose(1, 2).to(self.device), pc[:,:,None].to(self.device))[:, :, 0].to(self.device)  # (1, 3)
-
-                    images = self.phong_renderer(meshes_world=mesh.clone().to(self.device), R=R, T=T)
-                    # images = images[:,:-1,:,:]
-
-                    fragments = self.phong_renderer.rasterizer(mesh.clone().to(self.device))
-                    zbuf = fragments.zbuf
-                    # zbuf = zbuf.permute(0, 3, 1, 2)
-                    y = torch.cat((images, zbuf), dim=3)
-
-
-
-                    img_lst = torch.cat((img_lst,y.unsqueeze(0)),dim=0)
-                    if cam_display :
-                        T2 = torch.cat((T2,pc),dim=0)
-                        R2 = torch.cat((R2,R),dim=0)
-        if cam_display:
-            return img_lst, T2, R2
-        return img_lst
-    

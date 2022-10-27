@@ -6,11 +6,12 @@ from scipy.sparse.construct import random
 from sklearn.model_selection import train_test_split
 import random
 import matplotlib.pyplot as plt
+from tqdm import trange
 
 from vtk import vtkMatrix4x4, vtkMatrix3x3, vtkPoints
 import torch
 import pandas as pd
-from utils import ReadSurf
+from utils import GetTransform, ReadSurf
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 import numpy as np
 
@@ -233,9 +234,9 @@ def FocusTeeth(surf,surf_property,number_teeth):
 
 
 
-def get_landmarks_position(dataset_dir,df,idx, mean_arr, scale_factor,lst_landmarks):
+def get_landmarks_position(mount_point,df,idx, mean_arr, scale_factor,lst_landmarks,angle=None,vector=None):
        
-        data = json.load(open(os.path.join(dataset_dir,df.iloc[idx]["landmarks"])))
+        data = json.load(open(os.path.join(mount_point,df.iloc[idx]["landmarks"])))
         markups = data['markups']
         landmarks_lst = markups[0]['controlPoints']
 
@@ -247,6 +248,11 @@ def get_landmarks_position(dataset_dir,df,idx, mean_arr, scale_factor,lst_landma
                 landmarks_position[lst_landmarks.index(label)] = Downscale(landmark["position"],mean_arr,scale_factor)
 
         landmarks_pos = np.array([np.append(pos,1) for pos in landmarks_position])
+
+        if angle:
+            transform = GetTransform(angle,vector)
+            transform_matrix = arrayFromVTKMatrix(transform.GetMatrix())
+            landmarks_pos = np.matmul(transform_matrix,landmarks_pos.T).T
         return landmarks_pos[:, 0:3]
 
 

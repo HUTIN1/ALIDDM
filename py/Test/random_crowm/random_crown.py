@@ -28,7 +28,7 @@ from random import choice
 
 
 
-path = '/home/luciacev/Desktop/Project/ALIDDM/ALIDDM/py/Test/random_crowm/T3_17_L_segmented.vtk'
+path = '/home/luciacev/Desktop/Project/ALIDDM/data_test/0EAKT1CU_upper.vtk'
 
 
 surf = ReadSurf(path)
@@ -47,15 +47,21 @@ except AttributeError :
     try :
         region_id = tensor((vtk_to_numpy(surf.GetPointData().GetScalars("predictedId"))),dtype=torch.int64)
     except AttributeError:
-        region_id = tensor((vtk_to_numpy(surf.GetPointData().GetScalars("Universal_ID"))),dtype=torch.int64)
+        try:
+            region_id = tensor((vtk_to_numpy(surf.GetPointData().GetScalars("Universal_ID"))),dtype=torch.int64)
+        except AttributeError:
+            region_id = tensor((vtk_to_numpy(surf.GetPointData().GetScalars("UniversalID"))),dtype=torch.int64)
 # region_id = clamp(region_id, min=0)
 
 
 region_id_list= unique(region_id).numpy().tolist()
+print("region_id.size()",unique(region_id))
+print("region_id_list",region_id_list)
 if 33 in region_id_list:
     region_id_list.remove(33)
 print("region_id",region_id_list)
-tooth = choice(region_id_list)
+# tooth = oice(region_id_list)
+tooth =15
 print(tooth)
 
 print(max(region_id) - min(region_id),"-"*100)

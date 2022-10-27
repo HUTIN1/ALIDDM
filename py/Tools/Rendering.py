@@ -1,4 +1,4 @@
-
+import torch
 from pytorch3d.renderer import (
     FoVPerspectiveCameras,
     RasterizationSettings, MeshRenderer, MeshRasterizer,
@@ -6,7 +6,8 @@ from pytorch3d.renderer import (
 )
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer import TexturesVertex,blending
-from utils import isRotationMatrix
+from ALIDDM_utils import isRotationMatrix
+from shader import MaskRenderer
 
 
 class ALIIOSRendering:
@@ -112,13 +113,14 @@ class ALIIOSRendering:
                         T2 = torch.cat((T2,pc),dim=0)
                         R2 = torch.cat((R2,R),dim=0)
         if cam_display:
-            return img_lst, T2, R2          # size of img_lst (number image, 1 , image_size, image_size, 5)
-        img_lst = img_lst.squeeze().permute(0,3,1,2)
-        return img_lst      #size (number image , 5 , image_size, image_size)   #5 = rgb (normal) + segmentation + deptmap 
+            return img_lst, T2, R2          # size of img_lst ( number image, batch size, image_size, image_size, 5)
+        img_lst = img_lst.permute(1,0,4,2,3)        # batch_size , number image, channel, image size , image size
+        return img_lst.to(self.device).to(dtype=torch.float32)      #size (number image , 5 , image_size, image_size)   #5 = rgb (normal) + segmentation + deptmap 
 
 
     def renderingLandmark(self,mesh,cam_display=False):
         seuil =1 
+        img_lst = torch.empty((0)).to(self.device)
         if cam_display:
             T2 = torch.empty((0)).to(self.device)
             R2 = torch.empty((0)).to(self.device)
@@ -153,10 +155,10 @@ class ALIIOSRendering:
                         T2 = torch.cat((T2,T),dim=0)
                         R2 = torch.cat((R2,R),dim=0)
         if cam_display :
-            return img_lst, T2, R2  # size of img_lst (number image, 1 , image_size, image_size, 1)
+            return img_lst, T2, R2  # size of img_lst (number image, batch size , image_size, image_size, 1)
 
-        img_lst = img_lst.squeeze(1).permute(0,3,1,2) #remove de dimension 1, after permute  dimension 0->0, 1->2, 2->3, 3->1
-        return img_lst   # size of img_lst (number image, 1 , image_size, image_size)
+        img_lst = img_lst.permute(1,0,4,2,3) 
+        return img_lst.to(self.device).to(dtype=torch.float32)   # size of img_lst (batch size , number image, 1, image_size, image_size)
 
 
 
@@ -200,7 +202,7 @@ class ALIIOSRendering:
         if cam_display:
             return X, PF , T2, R2
 
-        X = X.squeeze(1).permute(0,3,1,2) 
+        X = X.permute(1,0,4,2,3) 
         return X, PF        #X size = (number image , 4 =rgb(normal) + deptmap , W,H)
                             #PF size = (number imag ,1 ,W,H,1)
     

@@ -23,7 +23,7 @@ from pytorch_lightning.loggers import NeptuneLogger, TensorBoardLogger
 # run = Run.get_context()
 
 def main(args):
-    os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+
 
     checkpoint_callback = ModelCheckpoint(
         dirpath=args.out,
@@ -45,7 +45,7 @@ def main(args):
 
 
 
-    teeth_data = TeethDataModule(df_test=df_test, df_train=df_train, df_val=df_val,mount_point=args.mount_point, num_workers = 4,surf_property ="UniversalID",batch_size=args.batch_size)
+    teeth_data = TeethDataModule(df_test=df_test, df_train=df_train, df_val=df_val,mount_point=args.mount_point, num_workers = 4,surf_property ="PredictedID",batch_size=args.batch_size)
 
     early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=args.patience, verbose=True, mode="min")
 
@@ -63,8 +63,7 @@ def main(args):
         accelerator="gpu", 
         strategy=DDPStrategy(find_unused_parameters=False, process_group_backend="nccl"),
         num_sanity_val_steps=0,
-        profiler=args.profiler,
-        fast_dev_run=True
+        profiler=args.profiler
     )
     trainer.fit(model, datamodule=teeth_data, ckpt_path=args.model)
 
@@ -85,7 +84,7 @@ if __name__ == '__main__':
     parser.add_argument('--out', help='Output', type=str, default="./")
     parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
-    parser.add_argument('--batch_size', help='Batch size', type=int, default=6)    
+    parser.add_argument('--batch_size', help='Batch size', type=int, default=30)    
     parser.add_argument('--train_sphere_samples', help='Number of training sphere samples or views used during training and validation', type=int, default=4)    
     parser.add_argument('--patience', help='Patience for early stopping', type=int, default=30)
     parser.add_argument('--profiler', help='Use a profiler', type=str, default=None)

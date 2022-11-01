@@ -1,0 +1,24 @@
+args: !!python/object:argparse.Namespace
+  batch_size: 36
+  csv_test: /home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth/test.csv
+  csv_train: /home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth/train.csv
+  csv_valid: /home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth/val.csv
+  epochs: 200
+  log_every_n_steps: 10
+  lr: 0.0001
+  model: null
+  mount_point: /home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth
+  num_workers: 4
+  out: /home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth/Output_train
+  patience: 30
+  profiler: null
+  tb_dir: 'yes'
+  tb_name: monai
+  train_sphere_samples: 4
+class_weights: null
+image_size: 320
+in_channels: 6
+out_channels: 34
+radius: 1.35
+subdivision_level: 1
+train_sphere_samples: 4

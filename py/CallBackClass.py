@@ -11,7 +11,7 @@ class TeethNetImageLogger(Callback):
 
         if batch_idx % self.log_steps == 0:
 
-                V, F, CN, CL, YF = batch
+                V, F, CN, CLF, YF = batch
 
                 batch_size = V.shape[0]
                 num_images = min(batch_size, self.num_images)
@@ -20,19 +20,27 @@ class TeethNetImageLogger(Callback):
                 F = F.to(pl_module.device, non_blocking=True)
                 YF = YF.to(pl_module.device, non_blocking=True)
                 CN = CN.to(pl_module.device, non_blocking=True).to(torch.float32)
-                CL = CL.to(pl_module.device, non_blocking=True).to(torch.float32)
+                CLF = CLF.to(pl_module.device, non_blocking=True).to(torch.float32)
 
                 with torch.no_grad():
 
-                    x, X, Y = pl_module((V[0:1], F[0:1], CN[0:1],CL[0:1]))
+                    x, X, PF = pl_module((V[0:1], F[0:1], CN[0:1],CLF[0:1]))
+
+                    Y = torch.take(YF, PF)*(PF>=0)
 
                     x = torch.argmax(x, dim=2, keepdim=True)
                     
                     grid_X = torchvision.utils.make_grid(X[0, 0:num_images, 0:3, :, :])#Grab the first image, RGB channels only, X, Y. The time dimension is on dim=1
                     trainer.logger.experiment.add_image('X_normals', grid_X, pl_module.global_step)
 
-                    grid_X = torchvision.utils.make_grid(X[0, 0:num_images, 3:, :, :])#Grab the depth map. The time dimension is on dim=1
+                    grid_X = torchvision.utils.make_grid(X[0, 0:num_images, 3, :, :])#Grab the depth map. The time dimension is on dim=1
+                    trainer.logger.experiment.add_image('X_segmented_render', grid_X, pl_module.global_step)
+
+                    grid_X = torchvision.utils.make_grid(X[0, 0:num_images, 4, :, :])#Grab the depth map. The time dimension is on dim=1
                     trainer.logger.experiment.add_image('X_depth', grid_X, pl_module.global_step)
+
+                    grid_X = torchvision.utils.make_grid(X[0, 0:num_images, 5, :, :])#Grab the depth map. The time dimension is on dim=1
+                    trainer.logger.experiment.add_image('X_segmented', grid_X, pl_module.global_step)
                     
                     grid_x = torchvision.utils.make_grid(x[0, 0:num_images, 0:1, :, :]/pl_module.out_channels)# The time dimension is on dim 1 grab only the first one
                     trainer.logger.experiment.add_image('x', grid_x, pl_module.global_step)

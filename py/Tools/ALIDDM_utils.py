@@ -2,18 +2,21 @@ import os
 import glob
 import json
 import csv
+from attr import astuple
 from scipy.sparse.construct import random
 from sklearn.model_selection import train_test_split
 import random
 import matplotlib.pyplot as plt
 from tqdm import trange
-
+from kmeans_pytorch import kmeans
 from vtk import vtkMatrix4x4, vtkMatrix3x3, vtkPoints
 import torch
 import pandas as pd
 from utils import GetTransform, ReadSurf
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 import numpy as np
+import vtk
+from random import choice
 
 from pytorch3d.renderer import (
     FoVPerspectiveCameras,
@@ -28,7 +31,7 @@ from torch import tensor
 from monai.transforms import (
     ToTensor
 )
-
+from post_process import RemoveIslands
 
 from shader import *
 import utils
@@ -221,14 +224,72 @@ def MeanScale(surf =None ,verts = None):
 
     return mean, scale
 
-def FocusTeeth(surf,surf_property,number_teeth):
+def FocusTeeth(surf,surf_property,number_teeth,error_chose=False,unique_ids=[]):
+    """_summary_
+
+    Args:
+        surf (_type_): _description_
+        surf_property (_type_): _description_
+        number_teeth (_type_): _description_
+        error_chose (bool, optional): True : if the code cant focus on tooth with number_teeth, it focus on other tooth
+
+    Returns:
+        _type_: _description_
+    """
     region_id = tensor((vtk_to_numpy(surf.GetPointData().GetScalars(surf_property))),dtype=torch.int64)
-    crown_ids = torch.argwhere(region_id == number_teeth).reshape(-1)
+
+    # crown_ids = torch.argwhere(region_id == number_teeth).reshape(-1)
+
+    # verts = vtk_to_numpy(surf.GetPoints().GetData())
+    # verts_crown = torch.tensor(verts[crown_ids])
+
+    # num_cluster = 2
+    # cluster_ids_x, cluster_center = kmeans(X= verts_crown, num_clusters=num_cluster,distance='euclidean')
+
+
+
+    # list_std=[]
+    # list_cluster=[]
+    # for i in range(num_cluster):
+    #     cluster = torch.where(cluster_ids_x==i,1,0)
+    #     std = torch.std(torch.tensor(verts_crown[cluster])).item()
+    #     list_std.append(std)
+    #     list_cluster.append(cluster)
+        
+    # std_max = max(list_std)
+    # id_max_std = list_std.index(std_max)
+    # verts_crown = verts_crown[list_cluster[id_max_std]]
+
+ 
+
+
+    vtk_id = numpy_to_vtk(region_id.cpu().numpy())
+    RemoveIslands(surf, vtk_id, 33, 500,ignore_neg1 = True)
+    error=0
+
+    #manage error, if RemoveIsland removes all label for the tooth number
+    while error_chose and error == 0:
+
+    
+        surf_loop = vtk.vtkPolyData()
+        surf_loop.DeepCopy(surf)
+
+    
+        RemoveIslands(surf_loop, vtk_id, number_teeth, 200,ignore_neg1 = True)
+        crown_ids = torch.argwhere(region_id == number_teeth).reshape(-1)
+
+        error = crown_ids.size()[0]
+
+        number_teeth = choice(unique_ids)
+
 
     verts = vtk_to_numpy(surf.GetPoints().GetData())
-    verts_crown = verts[crown_ids]
+    verts_crown = torch.tensor(verts[crown_ids])
 
-    mean, scale = MeanScale(verts = verts_crown)
+
+    mean, scale = MeanScale(verts=verts_crown.cpu().numpy())
+
+
     
     return mean , scale , utils.GetUnitSurf(surf, mean_arr= mean, scale_factor = 1/scale)
 

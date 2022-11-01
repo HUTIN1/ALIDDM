@@ -70,18 +70,18 @@ class TeethDataModule(pl.LightningDataModule):
     #     return DataLoader(self.test_ds, batch_size=self.batch_size, shuffle=True, collate_fn=self.ad_verts_faces)
 
     def pad_verts_faces(self, batch):
-        V = [V for V, F, CN, CL, YF  in batch]
-        F = [F for V, F, CN, CL, YF in batch]
-        CN = [CN for V, F, CN, CL, YF in batch]
-        CL = [CL for V, F, CN, CL ,YF in batch]
-        YF = [YF for V, F, CN, CL ,YF in batch]
+        V = [V for V, F, CN, CLF, YF  in batch]
+        F = [F for V, F, CN, CLF, YF in batch]
+        CN = [CN for V, F, CN, CLF, YF in batch]
+        CLF = [CL for V, F, CN, CL ,YF in batch]
+        YF = [YF for V, F, CN, CLF ,YF in batch]
 
         V = pad_sequence(V,batch_first=True, padding_value=0.0)
         F = pad_sequence(F,batch_first=True,padding_value=-1)
         CN = pad_sequence(CN,batch_first=True,padding_value=0.0)
-        CL = pad_sequence(CL,batch_first=True,padding_value=0.0)
+        CLF = pad_sequence(CLF,batch_first=True,padding_value=0.0)
         YF = torch.cat(YF)
-        return V, F, CN, CL, YF
+        return V, F, CN, CLF, YF
 
 
 
@@ -118,11 +118,14 @@ class DatasetValidation(Dataset):
 
         CLF = tensor((vtk_to_numpy(surf.GetPointData().GetScalars(self.surf_property))),dtype=torch.int64)
         unique_ids = torch.unique(CLF).cpu().tolist()
-        if 33 in unique_ids :
-            unique_ids.remove(33)
+        unique_ids.remove(0)
 
-        index_teeth = len(self.df)%len(unique_ids)
-        id_teeth = unique_ids[index_teeth]
+        unique_ids.remove(33)
+
+        # index_teeth = len(self.df)%len(unique_ids)
+        # id_teeth = unique_ids[index_teeth]
+        id_teeth = choice(unique_ids)
+
          
 
         
@@ -132,13 +135,17 @@ class DatasetValidation(Dataset):
         angle=False
         if self.random:
             surf, angle ,vectorrotation = RandomRotation(surf)
-        mean, scale, surf = FocusTeeth(surf,self.surf_property,id_teeth)
+        mean, scale, surf = FocusTeeth(surf,self.surf_property,id_teeth,error_chose=True,unique_ids=unique_ids)
         surf = ComputeNormals(surf) 
 
         V = torch.tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(torch.float32)
         F = torch.tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:]).to(torch.int64)
         CN = ToTensor(dtype=torch.float32)(vtk_to_numpy(GetColorArray(surf, "Normals"))/255.0)
-        CLF = tensor((vtk_to_numpy(surf.GetPointData().GetScalars(self.surf_property))),dtype=torch.int64)
+        faces_pid0 = F[:,0:1]            
+        CLF = torch.take(CLF, faces_pid0)            
+
+        CLF[CLF==-1] = 33 
+        CLF = CLF.to(torch.int64)
 
         # texture_normal = TexturesVertex(verts_features=color_normals[None,:,:])
         # texture_landmarks = TexturesVertex(verts_features=color_landmark)
@@ -147,7 +154,7 @@ class DatasetValidation(Dataset):
 
 
         faces_pid0 = F[:,0:1]
-        surf_point_data = surf.GetPointData().GetScalars(self.surf_property)
+        surf_point_data = surf.GetPointData().GetScalars("UniversalID")
 
         surf_point_data = torch.tensor(vtk_to_numpy(surf_point_data)).to(torch.float32)            
         surf_point_data_faces = torch.take(surf_point_data, faces_pid0)            

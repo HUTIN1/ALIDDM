@@ -6,35 +6,37 @@ import numpy as np
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 from monai.transforms import ToTensor
 
-import os 
-import sys
-script_dir = os.path.dirname(__file__)
-mymodule_dir = os.path.join(script_dir,'Tools')
-sys.path.append(mymodule_dir)
-from ALIDDM_utils import FocusTeeth
+from ALIDDM_utils import MeanScale
 import utils
 
 
 
 class RandomPickTeethTransform:
 
-    def __init__(self, surf_property, unique_ids=None):
+    def __init__(self, surf_property):
         self.surf_property = surf_property
-        self.unique_ids = unique_ids
 
-    def __call__(self, surf,MeanScale =False):
+
+    def __call__(self, surf):
+        print('start randompickteethtransfrom')
         region_id = tensor((vtk_to_numpy(surf.GetPointData().GetScalars(self.surf_property))),dtype=torch.int64)
-
-        if self.unique_ids is None:
-            unique_ids= torch.unique(region_id).numpy().tolist()  #create list with all number segmentation
-        else:
-            unique_ids = self.unique_ids
+        unique_ids = torch.unique(region_id).cpu().tolist()
+        if 33 in unique_ids:
+            unique_ids.remove(33)
 
         tooth = choice(unique_ids)
-        mean , scale , surf = FocusTeeth(surf,self.surf_property,tooth)
-
-        if MeanScale:
-            return mean,scale ,surf
+        crown_ids = torch.argwhere(region_id == tooth).reshape(-1)
+        verts = vtk_to_numpy(surf.GetPoints().GetData())
+        verts_crown = verts[crown_ids]
+        print('randompickteethtransfrom before meanscale')
+        mean,scale ,surf = MeanScale(verts = verts_crown)
+        print('scale',scale)
+        print('randompickteethtransfrom after meanscale')
+        print('randompickteethtransfrom before GenUnitsurf')
+        surf = utils.GetUnitSurf(surf, mean_arr= mean, scale_factor = 1/scale)
+        print('randompickteethtransfrom after GenUnitsurf')
+        print('end randompickteehttransform')
+        
 
         return surf
 
@@ -54,4 +56,5 @@ class UnitSurfTransform:
 
 class RandomRotation:
     def __call__(self,surf):
+        print('in random rotation')
         return utils.RandomRotation(surf)

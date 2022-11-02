@@ -14,6 +14,7 @@ from pytorch3d.renderer import (
 TexturesVertex
 )
 from pytorch_lightning.callbacks import ModelCheckpoint
+from monai.transforms import Compose
 
 
 import os 
@@ -23,6 +24,7 @@ mymodule_dir = os.path.join(script_dir,'..','..')
 sys.path.append(mymodule_dir)
 from DataModule import DatasetValidation
 from TrainingModule import MonaiUNetHRes
+from ManageClass import RandomPickTeethTransform,RandomRotation
 
 # from azureml.core.run import Run
 # run = Run.get_context()
@@ -61,12 +63,15 @@ def main(args):
     # class_weights = np.load(os.path.join(mount_point, 'train_weights.npy'))
     class_weights = None
 
+    train_transfrom = Compose([RandomPickTeethTransform(args.property),RandomRotation()])
+
     model = MonaiUNetHRes(args, out_channels = 34, class_weights=class_weights, image_size=320, train_sphere_samples=args.train_sphere_samples)
-    train_ds  = DatasetValidation(mount_point = args.mount_point, df = df_train,surf_property = "PredictedID",random=True)
+    train_ds  = DatasetValidation(mount_point = args.mount_point, df = df_train,surf_property = args.property,random=True,transform =train_transfrom )
 
     data = DataLoader(train_ds, batch_size=args.batch_size, num_workers=args.num_workers, persistent_workers=True, pin_memory=True, drop_last=False, collate_fn=pad_verts_faces)
 
     batch1= train_ds[0]
+    print("after get item")
 
     V, F, CN, CLF, YF =batch1
 
@@ -115,6 +120,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_sphere_samples', help='Number of training sphere samples or views used during training and validation', type=int, default=4)    
     parser.add_argument('--patience', help='Patience for early stopping', type=int, default=30)
     parser.add_argument('--profiler', help='Use a profiler', type=str, default=None)
+    parser.add_argument('--property', help='label of segmentation', type=str, default="PredictedID")
     
     parser.add_argument('--tb_dir', help='Tensorboard output dir', type=str, default=None)
     parser.add_argument('--tb_name', help='Tensorboard experiment name', type=str, default="monai")

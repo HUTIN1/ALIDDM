@@ -5,8 +5,15 @@ import sys
 import os
 import math
 from collections import namedtuple
-from utils import * 
 
+
+
+import os 
+import sys
+script_dir = os.path.dirname(__file__)
+mymodule_dir = os.path.join(script_dir,'..','Tools')
+sys.path.append(mymodule_dir)
+from utils import * 
 # parser = argparse.ArgumentParser()
 # parser.add_argument('--mesh', help='Insert mesh path')
 # parser.add_argument('--out', help='Insert output path+name')
@@ -206,13 +213,13 @@ def Post_processing(vtkdata):
 	# Write(vtkdata, 'test.vtk')
 	return vtkdata,label_array
 
-def ReadFile(filename):
+def ReadFile(filename, array_name='RegionId'):
 	inputSurface = filename
 	reader = vtk.vtkPolyDataReader()
 	reader.SetFileName(inputSurface)
 	reader.Update()
 	vtkdata = reader.GetOutput()
-	label_array = vtkdata.GetPointData().GetArray('RegionId')
+	label_array = vtkdata.GetPointData().GetArray(array_name)
 	return vtkdata, label_array
 
 def Write(vtkdata, output_name):
@@ -393,6 +400,8 @@ def Threshold(vtkdata, labels, threshold_min, threshold_max, invert=False):
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Predict an input with a trained neural network', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 	parser.add_argument('--surf', type=str, help='Input surface mesh to label', required=True)
+	parser.add_argument('--property', type=str, help='Input property name', default='RegionId')
+	parser.add_argument('--ignore_neg', type=bool, help='Ignore negative for island remove', default=0)
 	parser.add_argument('--remove_islands', type=bool, help='Remove islands from mesh by labeling with the closes one', default=False)
 	parser.add_argument('--connectivity', type=bool, help='Label all elements with unique labels', default=False)
 	parser.add_argument('--connectivity_label', type=int, help='Connectivity label', default=2)
@@ -412,14 +421,15 @@ if __name__ == '__main__':
 
 
 	args = parser.parse_args()
-	surf, labels = ReadFile(args.surf)
+	surf, labels = ReadFile(args.surf, args.property)
 
+	print(args.ignore)
 	if(args.remove_islands):
 		labels_range = np.zeros(2)
 		labels.GetRange(labels_range)
 		for label in range(int(labels_range[0]), int(labels_range[1]) + 1):
 			print("Removing islands:", label)
-			RemoveIslands(surf, labels, label, args.min_count)
+			RemoveIslands(surf, labels, label, min_count=args.min_count, ignore_neg1=args.ignore_neg)
 
 	if args.relabel:
 		print("Relabel:", )

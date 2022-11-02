@@ -31,10 +31,10 @@ from torch import tensor
 from monai.transforms import (
     ToTensor
 )
-from post_process import RemoveIslands
+
 
 from shader import *
-import utils
+import utils as utils
 from utils import GetColorArray
 
 def numberTooth2Landmark(tooth):
@@ -222,7 +222,7 @@ def MeanScale(surf =None ,verts = None):
     mean = (max_coord + min_coord)/2.0
     scale = np.linalg.norm(max_coord - mean)
 
-    return mean, scale
+    return mean, scale, surf
 
 def FocusTeeth(surf,surf_property,number_teeth,error_chose=False,unique_ids=[]):
     """_summary_
@@ -263,29 +263,32 @@ def FocusTeeth(surf,surf_property,number_teeth,error_chose=False,unique_ids=[]):
  
 
 
-    vtk_id = numpy_to_vtk(region_id.cpu().numpy())
-    RemoveIslands(surf, vtk_id, 33, 500,ignore_neg1 = True)
-    error=0
+    # vtk_id = numpy_to_vtk(region_id.cpu().numpy())
+    # RemoveIslands(surf, vtk_id, 33, 500,ignore_neg1 = True)
+    # error=0
 
     #manage error, if RemoveIsland removes all label for the tooth number
-    while error_chose and error == 0:
+    # while error_chose and error == 0:
 
     
-        surf_loop = vtk.vtkPolyData()
-        surf_loop.DeepCopy(surf)
+    #     surf_loop = vtk.vtkPolyData()
+    #     surf_loop.DeepCopy(surf)
 
     
-        RemoveIslands(surf_loop, vtk_id, number_teeth, 200,ignore_neg1 = True)
-        crown_ids = torch.argwhere(region_id == number_teeth).reshape(-1)
+    #     RemoveIslands(surf_loop, vtk_id, number_teeth, 200,ignore_neg1 = True)
+    #     crown_ids = torch.argwhere(region_id == number_teeth).reshape(-1)
 
-        error = crown_ids.size()[0]
+    #     error = crown_ids.size()[0]
 
-        number_teeth = choice(unique_ids)
+    #     number_teeth = choice(unique_ids)
 
 
+    # verts = vtk_to_numpy(surf.GetPoints().GetData())
+    # verts_crown = torch.tensor(verts[crown_ids])
+
+    crown_ids = torch.argwhere(region_id == number_teeth).reshape(-1)
     verts = vtk_to_numpy(surf.GetPoints().GetData())
     verts_crown = torch.tensor(verts[crown_ids])
-
 
     mean, scale = MeanScale(verts=verts_crown.cpu().numpy())
 

@@ -6,8 +6,8 @@ from pytorch3d.renderer import (
 )
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer import TexturesVertex,blending
-from ALIDDM_utils import isRotationMatrix
-from shader import MaskRenderer
+from ALIDDM.py.ALIDDM_utils import isRotationMatrix
+from ALIDDM.py.shader import MaskRenderer
 
 
 class ALIIOSRendering:

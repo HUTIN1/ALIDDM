@@ -200,9 +200,11 @@ def GetNeighborIds(vtkdata, pid, labels, label, pid_visited):
     return np.unique(neighbor_pids).tolist()
 
 def ScaleSurf(surf, mean_arr = None, scale_factor = None):
+    print('start scale surf')
     surf_copy = vtk.vtkPolyData()
     surf_copy.DeepCopy(surf)
     surf = surf_copy
+    print('scale surf afte copy')
 
     shapedatapoints = surf.GetPoints()
 

@@ -1,7 +1,7 @@
 import argparse
 import os
 
-from ALIDDM.py.Tools.ALIDDM_utils import *
+from ALIDDM.py.ALIDDM_utils import *
 from ALIDDM.py.DataModule import *
 import pandas as pd
 import GlobVar as GV

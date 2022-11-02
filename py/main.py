@@ -10,6 +10,8 @@ import torch
 from DataModule import TeethDataModule
 from TrainingModule import MonaiUNetHRes
 from CallBackClass import TeethNetImageLogger
+from monai.transforms import Compose
+from ManageClass import RandomPickTeethTransform, RandomRotation, UnitSurfTransform
 
 from pl_bolts.models.self_supervised import Moco_v2
 
@@ -43,9 +45,11 @@ def main(args):
 
     model = MonaiUNetHRes(args, out_channels = 34, class_weights=class_weights, image_size=320, train_sphere_samples=args.train_sphere_samples)
 
+    train_transfrom = Compose([RandomPickTeethTransform(args.property),RandomRotation()])
 
-
-    teeth_data = TeethDataModule(df_test=df_test, df_train=df_train, df_val=df_val,mount_point=args.mount_point, num_workers = 4,surf_property ="PredictedID",batch_size=args.batch_size)
+    teeth_data = TeethDataModule(df_test=df_test, df_train=df_train, df_val=df_val,mount_point=args.mount_point,
+     num_workers = 4,surf_property =args.property,batch_size=args.batch_size,
+     train_transform=train_transfrom,val_transform =RandomPickTeethTransform(args.property) , test_transform = RandomPickTeethTransform(args.property))
 
     early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=args.patience, verbose=True, mode="min")
 
@@ -84,10 +88,12 @@ if __name__ == '__main__':
     parser.add_argument('--out', help='Output', type=str, default="./")
     parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
-    parser.add_argument('--batch_size', help='Batch size', type=int, default=30)    
+    parser.add_argument('--batch_size', help='Batch size', type=int, default=20)    
     parser.add_argument('--train_sphere_samples', help='Number of training sphere samples or views used during training and validation', type=int, default=4)    
     parser.add_argument('--patience', help='Patience for early stopping', type=int, default=30)
     parser.add_argument('--profiler', help='Use a profiler', type=str, default=None)
+    parser.add_argument('--property', help='label of segmentation', type=str, default="PredictedID")
+    
     
     parser.add_argument('--tb_dir', help='Tensorboard output dir', type=str, default=None)
     parser.add_argument('--tb_name', help='Tensorboard experiment name', type=str, default="monai")

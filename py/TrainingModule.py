@@ -54,7 +54,7 @@ class TimeDistributed(nn.Module):
 
 
 class MonaiUNetHRes(pl.LightningModule):
-    def __init__(self, args = None, out_channels=3, in_channels = 6,class_weights=None, image_size=320, radius=1.01, subdivision_level=1, train_sphere_samples=4):
+    def __init__(self, args = None, out_channels=3, in_channels = 5,class_weights=None, image_size=320, radius=1.01, subdivision_level=1, train_sphere_samples=4):
 
         super(MonaiUNetHRes, self).__init__()        
         
@@ -158,7 +158,7 @@ class MonaiUNetHRes(pl.LightningModule):
             clf = torch.take(CLF, pf)*(pf >= 0)
 
             PF.append(pf.unsqueeze(1))
-            X.append(torch.cat((images, zbuf, clf), dim=3).unsqueeze(1))
+            X.append(torch.cat((images[:,:,:,0:3], zbuf, clf), dim=3).unsqueeze(1))
         
         X = torch.cat(X, dim=1)
         PF = torch.cat(PF, dim=1)      
@@ -174,7 +174,7 @@ class MonaiUNetHRes(pl.LightningModule):
         V = V.to(self.device, non_blocking=True)
         F = F.to(self.device, non_blocking=True)
         CN = CN.to(self.device, non_blocking=True).to(torch.float32)
-        CLF = CLF.to(self.device, non_blocking=True).to(torch.float32)
+        CLF = CLF.to(self.device, non_blocking=True)
         YF = YF.to(self.device, non_blocking=True)
 
         x, X, PF = self((V, F, CN, CLF))

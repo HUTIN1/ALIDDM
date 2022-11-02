@@ -20,7 +20,7 @@ class TeethNetImageLogger(Callback):
                 F = F.to(pl_module.device, non_blocking=True)
                 YF = YF.to(pl_module.device, non_blocking=True)
                 CN = CN.to(pl_module.device, non_blocking=True).to(torch.float32)
-                CLF = CLF.to(pl_module.device, non_blocking=True).to(torch.float32)
+                CLF = CLF.to(pl_module.device, non_blocking=True)
 
                 with torch.no_grad():
 
@@ -34,12 +34,9 @@ class TeethNetImageLogger(Callback):
                     trainer.logger.experiment.add_image('X_normals', grid_X, pl_module.global_step)
 
                     grid_X = torchvision.utils.make_grid(X[0, 0:num_images, 3, :, :])#Grab the depth map. The time dimension is on dim=1
-                    trainer.logger.experiment.add_image('X_segmented_render', grid_X, pl_module.global_step)
-
-                    grid_X = torchvision.utils.make_grid(X[0, 0:num_images, 4, :, :])#Grab the depth map. The time dimension is on dim=1
                     trainer.logger.experiment.add_image('X_depth', grid_X, pl_module.global_step)
 
-                    grid_X = torchvision.utils.make_grid(X[0, 0:num_images, 5, :, :])#Grab the depth map. The time dimension is on dim=1
+                    grid_X = torchvision.utils.make_grid(X[0, 0:num_images, 4, :, :]/pl_module.out_channels)#Grab the depth map. The time dimension is on dim=1
                     trainer.logger.experiment.add_image('X_segmented', grid_X, pl_module.global_step)
                     
                     grid_x = torchvision.utils.make_grid(x[0, 0:num_images, 0:1, :, :]/pl_module.out_channels)# The time dimension is on dim 1 grab only the first one

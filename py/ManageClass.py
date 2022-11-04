@@ -6,7 +6,7 @@ import numpy as np
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 from monai.transforms import ToTensor
 
-from ALIDDM_utils import MeanScale
+from ALIDDM_utils import MeanScale, TransformVTK
 import utils
 
 
@@ -33,7 +33,7 @@ class RandomPickTeethTransform:
         print('scale',scale)
         print('randompickteethtransfrom after meanscale')
         print('randompickteethtransfrom before GenUnitsurf')
-        surf = utils.GetUnitSurf(surf, mean_arr= mean, scale_factor = 1/scale)
+        surf = TransformVTK(surf,mean,scale)
         print('randompickteethtransfrom after GenUnitsurf')
         print('end randompickteehttransform')
         

@@ -432,3 +432,18 @@ def image_grid(
             if not show_axes:
                 ax.set_axis_off()
 
+
+
+def TransformVTK(surf,mean,scale):
+    scale = np.double(scale)
+    vtkpoint = surf.GetPoints()
+    points = vtk_to_numpy(vtkpoint.GetData())
+    points = (points-mean)/scale
+
+    vpoints= vtkPoints()
+    vpoints.SetNumberOfPoints(points.shqpe[0])
+    for i in range(points.shape[0]):
+        vpoints.SetPoint(i,points[i])
+    surf.SetPoints(vpoints)
+
+    return surf

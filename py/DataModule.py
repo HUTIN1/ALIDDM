@@ -120,7 +120,9 @@ class DatasetValidation(Dataset):
         if self.transform:
             surf = self.transform(surf)
 
-        surf = surf[0]
+
+        if isinstance(surf,tuple):
+            surf = surf[0]
 
 
 
@@ -147,6 +149,7 @@ class DatasetValidation(Dataset):
         surf_point_data_faces[surf_point_data_faces==-1] = 33 
         YF = surf_point_data_faces
         YF = YF.to(torch.int64)
+
 
         return V, F, CN, CLF, YF
 

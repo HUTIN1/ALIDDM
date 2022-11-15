@@ -157,13 +157,17 @@ class MonaiUNetHRes(pl.LightningModule):
 
             clf = torch.take(CLF, pf)*(pf >= 0)
 
+            images = torch.cat([images[:,:,:,0:3], zbuf,clf], dim=-1)
+            images = images.permute(0,3,1,2)
+
+            pf = pf.permute(0,3,1,2)
+
             PF.append(pf.unsqueeze(1))
-            X.append(torch.cat((images[:,:,:,0:3], zbuf, clf), dim=3).unsqueeze(1))
+            X.append(images.unsqueeze(1))
         
         X = torch.cat(X, dim=1)
         PF = torch.cat(PF, dim=1)      
-        X = X.permute(0,1,4,2,3)
-        PF = PF.permute(0,1,4,2,3)
+
 
         return X, PF
 
@@ -182,8 +186,7 @@ class MonaiUNetHRes(pl.LightningModule):
         y = torch.take(YF, PF)*(PF>=0)
 
         x = x.permute(0,2,1,3,4)
-        y = y.permute(0, 2,1,3,4) 
-            
+        y = y.permute(0,2,1,3,4) 
         loss = self.loss(x, y)
 
         batch_size = V.shape[0]
@@ -211,7 +214,7 @@ class MonaiUNetHRes(pl.LightningModule):
 
 
         x = x.permute(0,2,1,3,4)
-        y = y.permute(0, 4,1,2,3)        
+        y = y.permute(0,2,1,3,4)      
         loss = self.loss(x, y)
         
         batch_size = V.shape[0]
@@ -234,7 +237,7 @@ class MonaiUNetHRes(pl.LightningModule):
         y = torch.take(YF, PF)*(PF>=0)
 
         x = x.permute(0,2,1,3,4)
-        y = y.permute(0, 4,1,2,3) 
+        y = y.permute(0,2,1,3,4) 
         loss = self.loss(x, y)
 
         self.accuracy(torch.argmax(x, dim=1, keepdim=True).reshape(-1, 1), y.reshape(-1, 1).to(torch.int32))        

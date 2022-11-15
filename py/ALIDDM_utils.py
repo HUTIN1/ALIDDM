@@ -216,11 +216,13 @@ def Gen_mesh_patch(surf,V,F,CN,LP,label):
 
 def MeanScale(surf =None ,verts = None):
     if surf : 
-        verts = vtk_to_numpy(surf.GetPoints().GetData())
-    min_coord = np.min(verts, axis=0)
-    max_coord= np.max(verts, axis=0)
+        verts = tensor(vtk_to_numpy(surf.GetPoints().GetData()))
+
+    min_coord = torch.min(verts,0)[0]
+    max_coord= torch.max(verts,0)[0]
     mean = (max_coord + min_coord)/2.0
-    scale = np.linalg.norm(max_coord - mean)
+    mean= mean.numpy()
+    scale = np.linalg.norm(max_coord.numpy() - mean)
 
     return mean, scale, surf
 
@@ -441,7 +443,7 @@ def TransformVTK(surf,mean,scale):
     points = (points-mean)/scale
 
     vpoints= vtkPoints()
-    vpoints.SetNumberOfPoints(points.shqpe[0])
+    vpoints.SetNumberOfPoints(points.shape[0])
     for i in range(points.shape[0]):
         vpoints.SetPoint(i,points[i])
     surf.SetPoints(vpoints)

@@ -18,27 +18,33 @@ class RandomPickTeethTransform:
 
 
     def __call__(self, surf):
-        print('start randompickteethtransfrom')
         region_id = tensor((vtk_to_numpy(surf.GetPointData().GetScalars(self.surf_property))),dtype=torch.int64)
-        unique_ids = torch.unique(region_id).cpu().tolist()
-        if 33 in unique_ids:
-            unique_ids.remove(33)
+        unique_ids = torch.unique(region_id)[1:-1]
 
-        tooth = choice(unique_ids)
+
+        tooth = torch.randint(low=torch.min(unique_ids),high=torch.max(unique_ids),size=(1,))
         crown_ids = torch.argwhere(region_id == tooth).reshape(-1)
         verts = vtk_to_numpy(surf.GetPoints().GetData())
-        verts_crown = verts[crown_ids]
-        print('randompickteethtransfrom before meanscale')
-        mean,scale ,surf = MeanScale(verts = verts_crown)
-        print('scale',scale)
-        print('randompickteethtransfrom after meanscale')
-        print('randompickteethtransfrom before GenUnitsurf')
-        surf = TransformVTK(surf,mean,scale)
-        print('randompickteethtransfrom after GenUnitsurf')
-        print('end randompickteehttransform')
-        
 
+        verts_crown = tensor(verts[crown_ids])
+
+        while len(verts_crown) ==0 :
+                tooth = torch.randint(low=torch.min(unique_ids),high=torch.max(unique_ids),size=(1,))
+                crown_ids = torch.argwhere(region_id == tooth).reshape(-1)
+                verts = vtk_to_numpy(surf.GetPoints().GetData())
+
+                verts_crown = tensor(verts[crown_ids])
+
+        # print(verts_crown)
+        mean,scale ,_ = MeanScale(verts = verts_crown)
+
+        surf = TransformVTK(surf,mean,scale)
+
+        
         return surf
+
+
+
 
 class UnitSurfTransform:
 
@@ -56,5 +62,4 @@ class UnitSurfTransform:
 
 class RandomRotation:
     def __call__(self,surf):
-        print('in random rotation')
         return utils.RandomRotation(surf)

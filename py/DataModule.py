@@ -117,11 +117,9 @@ class DatasetValidation(Dataset):
         surf = ReadSurf(os.path.join(self.mount_point,self.df.iloc[idx]["surf"]))
 
 
-        print('before transform')
         if self.transform:
             surf = self.transform(surf)
 
-        print('after transform')
         surf = surf[0]
 
 

@@ -24,6 +24,8 @@ from pytorch_lightning.loggers import NeptuneLogger, TensorBoardLogger
 # from azureml.core.run import Run
 # run = Run.get_context()
 
+CUDA_LAUNCH_BLOCKING="1"
+
 def main(args):
 
 
@@ -88,7 +90,7 @@ if __name__ == '__main__':
     parser.add_argument('--out', help='Output', type=str, default="./")
     parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
-    parser.add_argument('--batch_size', help='Batch size', type=int, default=20)    
+    parser.add_argument('--batch_size', help='Batch size', type=int, default=1)    
     parser.add_argument('--train_sphere_samples', help='Number of training sphere samples or views used during training and validation', type=int, default=4)    
     parser.add_argument('--patience', help='Patience for early stopping', type=int, default=30)
     parser.add_argument('--profiler', help='Use a profiler', type=str, default=None)

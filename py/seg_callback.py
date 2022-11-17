@@ -3,7 +3,7 @@ import torchvision
 import torch
 
 
-class TeethNetImageLogger(Callback):
+class TeethNetImageLoggerSeg(Callback):
     def __init__(self, num_images=12, log_steps=10):
         self.log_steps = log_steps
         self.num_images = num_images
@@ -22,11 +22,12 @@ class TeethNetImageLogger(Callback):
                 CN = CN.to(pl_module.device, non_blocking=True).to(torch.float32)
                 CLF = CLF.to(pl_module.device, non_blocking=True)
 
+
                 with torch.no_grad():
 
-                    x, X, PF = pl_module((V[0:1], F[0:1], CN[0:1],CLF[0:1]))
+                    x, X, PF = pl_module((V[0:1], F[0:1], CN[0:1],CLF[:F.shape[1],:]))
 
-                    Y = torch.take(YF, PF)*(PF>=0)
+                    Y = torch.take(YF[:F.shape[1],:], PF)*(PF>=0)
 
                     x = torch.argmax(x, dim=2, keepdim=True)
                     

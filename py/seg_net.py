@@ -8,7 +8,7 @@ import torchvision
 from torchvision import models
 from torchvision import transforms
 import torchmetrics
-from shader import MaskRenderer
+# from shader import MaskRenderer
 import utils
 
 import monai
@@ -22,9 +22,10 @@ from pytorch3d.structures import Meshes
 import pytorch_lightning as pl
 
 class TimeDistributed(nn.Module):
-    def __init__(self, module):
+    def __init__(self, module,prediction=False):
         super(TimeDistributed, self).__init__()
         self.module = module
+        self.prediction = prediction
  
     def forward(self, input_seq):
         assert len(input_seq.size()) > 2
@@ -42,6 +43,7 @@ class TimeDistributed(nn.Module):
  
         output = self.module(reshaped_input)
         
+        
         output_size = output.size()
         output_size = [batch_size, time_steps] + list(output_size[1:])
         output = output.contiguous().view(output_size)
@@ -53,8 +55,11 @@ class TimeDistributed(nn.Module):
 
 
 
+
+
+
 class MonaiUNetHRes(pl.LightningModule):
-    def __init__(self, args = None, out_channels=3, in_channels = 5,class_weights=None, image_size=320, radius=1.01, subdivision_level=1, train_sphere_samples=4):
+    def __init__(self, args = None, out_channels=3, in_channels = 5,class_weights=None, image_size=320, radius=1.01, subdivision_level=1, train_sphere_samples=4,prediction=False):
 
         super(MonaiUNetHRes, self).__init__()        
         
@@ -79,23 +84,25 @@ class MonaiUNetHRes(pl.LightningModule):
             num_res_units=2,
         )
         self.model = TimeDistributed(unet)
-
-        # ico_verts, ico_faces = utils.PolyDataToTensors(utils.CreateIcosahedron(radius=radius, sl=subdivision_level))
-        # ico_verts = ico_verts.to(torch.float32)
-        ico_verts = torch.tensor([[1,0,0]]).to(torch.float32)*float(radius)
+        if prediction:
+            ico_verts, ico_faces = utils.PolyDataToTensors(utils.CreateIcosahedron(radius=radius, sl=subdivision_level))
+            ico_verts = ico_verts.to(torch.float32)
+        else :
+            ico_verts = torch.tensor([[1,0,0]]).to(torch.float32)*float(radius)
 
         for idx, v in enumerate(ico_verts):
             if (torch.abs(torch.sum(v)) == radius):
                 ico_verts[idx] = v + torch.normal(0.0, 1e-7, (3,))
 
         
-        self.register_buffer("ico_verts", ico_verts)
+        # self.register_buffer("ico_verts", ico_verts)
+        self.ico_verts = ico_verts
 
         self.renderer = self.setup_render()
 
     def setup_render(self):
-        cameras = FoVPerspectiveCameras(znear=0.01,zfar = 10, fov= 90, device= self.device) # Initialize a perspective camera.
-
+        # cameras = FoVPerspectiveCameras(znear=0.01,zfar = 10, fov= 90, device= self.device) # Initialize a perspective camera.
+        cameras = FoVPerspectiveCameras()
         raster_settings = RasterizationSettings(        
             image_size=self.image_size, 
             blur_radius=0, 
@@ -103,17 +110,18 @@ class MonaiUNetHRes(pl.LightningModule):
             max_faces_per_bin=200000
         )
 
-        lights = PointLights(device = self.device) # light in front of the object. 
+        # lights = PointLights(device = self.device) # light in front of the object. 
+        lights = AmbientLights()
 
         rasterizer = MeshRasterizer(
                 cameras=cameras, 
                 raster_settings=raster_settings
             )
 
-        b = blending.BlendParams(background_color=(0,0,0))
+
         phong_renderer = MeshRenderer(
             rasterizer=rasterizer,
-            shader=HardPhongShader( device = self.device ,cameras=cameras, lights=lights,blend_params=b)
+            shader=HardPhongShader(cameras=cameras, lights=lights)
         )
     
         return phong_renderer
@@ -145,7 +153,7 @@ class MonaiUNetHRes(pl.LightningModule):
 
         for camera_position in self.ico_verts:
 
-            camera_position = camera_position.unsqueeze(0)
+            camera_position = camera_position.unsqueeze(0).to(self.device)
 
             R = look_at_rotation(camera_position, device=self.device)  # (1, 3, 3)
             T = -torch.bmm(R.transpose(1, 2), camera_position[:,:,None])[:, :, 0]   # (1, 3)
@@ -190,6 +198,9 @@ class MonaiUNetHRes(pl.LightningModule):
         loss = self.loss(x, y)
 
         batch_size = V.shape[0]
+        clone_loss = loss.detach().clone()
+        # print('loss',loss)
+        # print('clone loss',clone_loss)
         self.log('train_loss', loss, batch_size=batch_size)
         self.accuracy(torch.argmax(x, dim=1, keepdim=True).reshape(-1, 1), y.reshape(-1, 1).to(torch.int32))
         self.log("train_acc", self.accuracy, batch_size=batch_size)

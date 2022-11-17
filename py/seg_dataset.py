@@ -24,6 +24,7 @@ from random import randint
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer import TexturesVertex
 
+
 from utils import(
     ReadSurf,
     ComputeNormals,
@@ -31,7 +32,7 @@ from utils import(
     RandomRotation
 )
 
-class TeethDataModule(pl.LightningDataModule):
+class TeethDataModuleSeg(pl.LightningDataModule):
     def __init__(self, df_train, df_val,df_test,num_workers = 4,surf_property =None ,mount_point='./',batch_size=1, drop_last=False,
     train_transform=None,val_transform=None,test_transform=None) -> None:
         super().__init__()
@@ -53,10 +54,11 @@ class TeethDataModule(pl.LightningDataModule):
         self.val_transform = val_transform
         self.test_transform = test_transform
 
+
     def setup(self,stage =None):
-        self.train_ds = DatasetValidation(mount_point = self.mount_point, df = self.df_train,surf_property = self.surf_property,random=True,transform=self.train_transform)
-        self.val_ds = DatasetValidation(mount_point = self.mount_point, df = self.df_val,surf_property = self.surf_property, transform=self.val_transform)
-        self.test_ds = DatasetValidation(mount_point = self.mount_point, df = self.df_test,surf_property = self.surf_property,transform=self.test_transform)
+        self.train_ds = TeethDatasetSeg(mount_point = self.mount_point, df = self.df_train,surf_property = self.surf_property,random=True,transform=self.train_transform)
+        self.val_ds = TeethDatasetSeg(mount_point = self.mount_point, df = self.df_val,surf_property = self.surf_property, transform=self.val_transform)
+        self.test_ds = TeethDatasetSeg(mount_point = self.mount_point, df = self.df_test,surf_property = self.surf_property,transform=self.test_transform)
 
     def train_dataloader(self):
         return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers, persistent_workers=True, pin_memory=True, drop_last=self.drop_last, collate_fn=self.pad_verts_faces)
@@ -76,11 +78,13 @@ class TeethDataModule(pl.LightningDataModule):
         CLF = [CL for V, F, CN, CL ,YF in batch]
         YF = [YF for V, F, CN, CLF ,YF in batch]
 
+
         V = pad_sequence(V,batch_first=True, padding_value=0.0)
         F = pad_sequence(F,batch_first=True,padding_value=-1)
         CN = pad_sequence(CN,batch_first=True,padding_value=0.0)
         CLF = torch.cat(CLF)
         YF = torch.cat(YF)
+
         return V, F, CN, CLF, YF
 
 
@@ -91,41 +95,70 @@ class TeethDataModule(pl.LightningDataModule):
 
 
 
-class DatasetValidation(Dataset):
-    def __init__(self,df,surf_property ,mount_point='',random=False,transform = False):
+class TeethDatasetSeg(Dataset):
+    def __init__(self,df,surf_property ,mount_point='',random=False,transform = False,prediction=False):
         self.df = df
         self.mount_point = mount_point
 
         self.surf_property = surf_property
 
         self.random = random
-        self.number_teeth = 14
+        self.number_teeth = 10
         self.transform = transform
+        self.prediction = prediction
 
 
     def __len__(self):
+        if self.prediction:
+            return len(self.df)#*self.number_teeth
+            
         return len(self.df)*self.number_teeth
 
     def __getitem__(self, index) :
 
 
-        if self.random:
-            index = randint(0, len(self)-1)
+
+        if not self.prediction:
+            index=index//self.number_teeth
+        surf = ReadSurf(os.path.join(self.mount_point,self.df.iloc[index]["surf"]))
 
 
-        idx=index//self.number_teeth
-        surf = ReadSurf(os.path.join(self.mount_point,self.df.iloc[idx]["surf"]))
+
+        if self.prediction :
+            self.prediction[surf]
+            V = []
+            F = []
+            CN = []
+            CLF = []
+            YF = []
+
+            for surf in self.prediction:
+                V1, F1, CN1, CLF1, YF1 = self.Decompose(surf)
+                V.append(V1.unsqueeze(0))
+                F.append(F1.unsqueeze(0))
+                CN.append(CN1.unsqueeze(0))
+                CLF.append(CLF1.unsqueeze(0))
+                YF.append(YF1.unsqueeze(0))
+
+            V = torch.cat(V,dim=0)
+            F = torch.cat(F,dim=0)
+            CN = torch.cat(CN,dim=0)
+            CLF = torch.cat(CLF,dim=0)
+            YF = torch.cat(YF,dim=0)
+        else :
+
+            V, F, CN, CLF, YF = self.Decompose(surf)
 
 
+        return V, F, CN, CLF, YF
+
+
+    def Decompose(self,surf):
         if self.transform:
             surf = self.transform(surf)
 
-
         if isinstance(surf,tuple):
             surf = surf[0]
-
-
-
 
         surf = ComputeNormals(surf) 
 
@@ -151,7 +184,13 @@ class DatasetValidation(Dataset):
         YF = YF.to(torch.int64)
 
 
-        return V, F, CN, CLF, YF
+
+        return V, F, CN, CLF, YF     
+
+
+    def getSurf(self,idx):
+        surf = ReadSurf(os.path.join(self.mount_point,self.df.iloc[idx]["surf"]))
+        return surf
 
 
 # class DatasetValidation(Dataset):

@@ -63,3 +63,63 @@ class UnitSurfTransform:
 class RandomRotation:
     def __call__(self,surf):
         return utils.RandomRotation(surf)
+
+
+
+class PickTeethTransform:
+    def __init__(self,surf_property):
+         self.surf_property = surf_property
+
+
+    def __call__(self, surf,tooth):
+        region_id = tensor((vtk_to_numpy(surf.GetPointData().GetScalars(self.surf_property))),dtype=torch.int64)
+
+        crown_ids = torch.argwhere(region_id == tooth).reshape(-1)
+        verts = vtk_to_numpy(surf.GetPoints().GetData())
+
+        verts_crown = tensor(verts[crown_ids])
+
+        if len(verts_crown)==0:
+            return None           
+        # print(verts_crown)
+        mean,scale ,_ = MeanScale(verts = verts_crown)
+
+        surf = TransformVTK(surf,mean,scale)
+
+        return surf
+
+
+
+class IterTeeth:
+    def __init__(self,surf_property) -> None:
+        self.surf_property = surf_property
+        self.surf=None
+        self.list_tooth=None
+        self.iter=0
+        self.PickTeethTransform = PickTeethTransform(surf_property)
+
+    def __getitem__(self,surf):
+        region_id = tensor((vtk_to_numpy(surf.GetPointData().GetScalars(self.surf_property))),dtype=torch.int64)
+        unique_ids = torch.unique(region_id)[1:-1]
+        self.list_tooth=unique_ids
+
+        self.surf=surf
+
+
+    def __iter__(self):
+        self.iter=0
+        return self
+
+    def __next__(self):
+        
+        if len(self.list_tooth)<=self.iter:
+            raise StopIteration
+        out = self.PickTeethTransform(self.surf,self.list_tooth[self.iter])
+        while out is None :
+            self.iter+=1
+            if len(self.list_tooth)<=self.iter:
+                raise StopIteration
+            out = self.PickTeethTransform(self.surf,self.list_tooth[self.iter])
+        self.iter+=1
+        return out
+    

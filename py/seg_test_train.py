@@ -17,13 +17,8 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from monai.transforms import Compose
 
 
-import os 
-import sys
-script_dir = os.path.dirname(__file__)
-mymodule_dir = os.path.join(script_dir,'..','..')
-sys.path.append(mymodule_dir)
-from DataModule import DatasetValidation
-from TrainingModule import MonaiUNetHRes
+from seg_dataset import TeethDatasetSeg
+from seg_trainning import MonaiUNetHRes
 from ManageClass import RandomPickTeethTransform,RandomRotation
 
 # from azureml.core.run import Run
@@ -40,7 +35,7 @@ def pad_verts_faces(self, batch):
     V = pad_sequence(V,batch_first=True, padding_value=0.0)
     F = pad_sequence(F,batch_first=True,padding_value=-1)
     CN = pad_sequence(CN,batch_first=True,padding_value=0.0)
-    CLF = pad_sequence(CLF,batch_first=True,padding_value=0.0)
+    CLF = torch.cat(YF)
     YF = torch.cat(YF)
     return V, F, CN, CLF, YF
 
@@ -66,7 +61,7 @@ def main(args):
     train_transfrom = Compose([RandomPickTeethTransform(args.property),RandomRotation()])
 
     model = MonaiUNetHRes(args, out_channels = 34, class_weights=class_weights, image_size=320, train_sphere_samples=args.train_sphere_samples)
-    train_ds  = DatasetValidation(mount_point = args.mount_point, df = df_train,surf_property = args.property,random=True,transform =train_transfrom )
+    train_ds  = TeethDatasetSeg(mount_point = args.mount_point, df = df_train,surf_property = args.property,random=True,transform =train_transfrom )
 
     data = DataLoader(train_ds, batch_size=args.batch_size, num_workers=args.num_workers, persistent_workers=True, pin_memory=True, drop_last=False, collate_fn=pad_verts_faces)
 
@@ -106,24 +101,27 @@ if __name__ == '__main__':
 
 
     parser = argparse.ArgumentParser(description='Teeth challenge Training')
-    parser.add_argument('--csv_train', help='CSV with column surf', type=str, required=True)    
-    parser.add_argument('--csv_valid', help='CSV with column surf', type=str, required=True)
-    parser.add_argument('--csv_test', help='CSV with column surf', type=str, required=True)      
+    parser.add_argument('--csv_train', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth/train_test.csv')    
+    parser.add_argument('--csv_valid', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth/val_test.csv')
+    parser.add_argument('--csv_test', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth/test_test.csv')      
     parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='Learning rate')
     parser.add_argument('--log_every_n_steps', help='Log every n steps', type=int, default=10)    
     parser.add_argument('--epochs', help='Max number of epochs', type=int, default=200)    
     parser.add_argument('--model', help='Model to continue training', type=str, default= None)
-    parser.add_argument('--out', help='Output', type=str, default="./")
+    parser.add_argument('--out', help='Output', type=str, default="/home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth/model_output_train")
     parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
-    parser.add_argument('--batch_size', help='Batch size', type=int, default=30)    
+    parser.add_argument('--batch_size', help='Batch size', type=int, default=2)    
     parser.add_argument('--train_sphere_samples', help='Number of training sphere samples or views used during training and validation', type=int, default=4)    
-    parser.add_argument('--patience', help='Patience for early stopping', type=int, default=30)
+    parser.add_argument('--patience', help='Patience for early stopping', type=int, default=4)
     parser.add_argument('--profiler', help='Use a profiler', type=str, default=None)
     parser.add_argument('--property', help='label of segmentation', type=str, default="PredictedID")
     
-    parser.add_argument('--tb_dir', help='Tensorboard output dir', type=str, default=None)
+    
+    parser.add_argument('--tb_dir', help='Tensorboard output dir', type=str, default='/home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth/tensorboard')
     parser.add_argument('--tb_name', help='Tensorboard experiment name', type=str, default="monai")
+
+
 
 
     args = parser.parse_args()

@@ -300,43 +300,80 @@ def FocusTeeth(surf,surf_property,number_teeth,error_chose=False,unique_ids=[]):
 
 
 
-def get_landmarks_position(mount_point,df,idx, mean_arr, scale_factor,lst_landmarks,angle=None,vector=None):
+# def get_landmarks_position(mount_point,df,idx, mean_arr, scale_factor,lst_landmarks,angle=None,vector=None):
        
-        data = json.load(open(os.path.join(mount_point,df.iloc[idx]["landmarks"])))
+#         data = json.load(open(os.path.join(mount_point,df.iloc[idx]["landmarks"])))
+#         markups = data['markups']
+#         landmarks_lst = markups[0]['controlPoints']
+
+#         landmarks_position = np.zeros([len(lst_landmarks), 3])
+#         # resc_landmarks_position = np.zeros([number_of_landmarks, 3])
+#         for landmark in landmarks_lst:
+#             label = landmark["label"]
+#             if label in lst_landmarks:
+#                 landmarks_position[lst_landmarks.index(label)] = Downscale(landmark["position"],mean_arr,scale_factor)
+
+#         landmarks_pos = np.array([np.append(pos,1) for pos in landmarks_position])
+
+#         if angle:
+#             transform = GetTransform(angle,vector)
+#             transform_matrix = arrayFromVTKMatrix(transform.GetMatrix())
+#             landmarks_pos = np.matmul(transform_matrix,landmarks_pos.T).T
+#         return landmarks_pos[:, 0:3]
+
+
+def get_landmarks_position(path,landmark, mean_arr, scale_factor,angle=None,vector=None):
+
+        data = json.load(open(os.path.join(path)))
         markups = data['markups']
         landmarks_lst = markups[0]['controlPoints']
 
-        landmarks_position = np.zeros([len(lst_landmarks), 3])
+        landmarks_pos = None
         # resc_landmarks_position = np.zeros([number_of_landmarks, 3])
-        for landmark in landmarks_lst:
-            label = landmark["label"]
-            if label in lst_landmarks:
-                landmarks_position[lst_landmarks.index(label)] = Downscale(landmark["position"],mean_arr,scale_factor)
-
-        landmarks_pos = np.array([np.append(pos,1) for pos in landmarks_position])
+        for lm in landmarks_lst:
+            label = lm["label"]
+            if label == landmark:
+                landmarks_pos = np.array(np.append(Downscale(lm["position"],mean_arr,scale_factor),1))
+                continue
 
         if angle:
             transform = GetTransform(angle,vector)
             transform_matrix = arrayFromVTKMatrix(transform.GetMatrix())
             landmarks_pos = np.matmul(transform_matrix,landmarks_pos.T).T
-        return landmarks_pos[:, 0:3]
+        return landmarks_pos[:3]
 
-
-def pos_landmard2texture(vertex,list_landmark_pos):
+def pos_landmard2texture(vertex,landmark_pos):
     texture = torch.zeros_like(vertex.unsqueeze(0))
     vertex = vertex.to(torch.float64)
-    radius = 0.02
-    for i, landmark_pos in enumerate(list_landmark_pos):
+    radius = 0.25
 
-        landmark_pos = tensor([landmark_pos])
-        distance = torch.cdist(landmark_pos,vertex,p=2)
-        minvalue = torch.min(distance)
-        distance = distance - minvalue
-        #print(min(distance,1))
-        index_pos_land = torch.nonzero((distance<radius),as_tuple=True)
-        for index in index_pos_land:
-            texture[0,index,i]=255
 
+    landmark_pos = tensor(np.array(landmark_pos)).unsqueeze(0)
+    distance = torch.cdist(landmark_pos,vertex,p=2)
+    minvalue = torch.min(distance)
+    distance = distance - minvalue
+    #print(min(distance,1))
+    _, index_pos_land = torch.nonzero((distance<radius),as_tuple=True)
+
+    texture[0,index_pos_land,1]=255
+
+    return texture
+
+
+def pos_landmard2seg(vertex,landmark_pos):
+    texture = torch.zeros(size=(vertex.shape[0],))
+    vertex = vertex.to(torch.float64)
+    radius = 0.09
+
+
+    landmark_pos = tensor(np.array(landmark_pos)).unsqueeze(0)
+    distance = torch.cdist(landmark_pos,vertex,p=2)
+    minvalue = torch.min(distance)
+    distance = distance - minvalue
+    _, index_pos_land = torch.nonzero((distance<radius),as_tuple=True)
+    for i in index_pos_land:
+
+        texture[i]=1
     return texture
 
 def arrayFromVTKMatrix(vmatrix):
@@ -449,3 +486,11 @@ def TransformVTK(surf,mean,scale):
     surf.SetPoints(vpoints)
 
     return surf
+
+
+
+def removeversionfolder(path,name='version'):
+    listdir = os.listdir(path)
+    for dir in listdir :
+        if os.path.isdir(os.path.join(path,dir)) and name in dir:
+            os.system(f'rm -r {os.path.join(path,dir)}')

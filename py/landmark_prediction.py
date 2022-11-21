@@ -104,8 +104,8 @@ if __name__ == '__main__':
 
 
     parser = argparse.ArgumentParser(description='Teeth challenge prediction')
-    parser.add_argument('--csv', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/seg/prediction_test.csv')    
-    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/seg/model/best_model.ckpt")
+    parser.add_argument('--csv', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/prediction_test.csv')    
+    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/best_model.ckpt")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
     parser.add_argument('--out', help='Output', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/test_prediction_Seg")
     parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth")

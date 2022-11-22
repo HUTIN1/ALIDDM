@@ -33,13 +33,13 @@ class TeethNetImageLoggerLm(Callback):
 
                     Y2 = torch.cat((Y,Y,Y),dim=2)
                     Yread = torch.tensor(X[:, :, 0:3, :, :].clone().detach().requires_grad_(True))
-                    Yread[Y2==1] = 1
+                    Yread[Y2==1] = 0
 
                     
                     grid_X = torchvision.utils.make_grid(X[0, :, 0:3, :, :])#Grab the first image, RGB channels only, X, Y. The time dimension is on dim=1
                     trainer.logger.experiment.add_image('X_normals', grid_X, pl_module.global_step)
 
-                    grid_X = torchvision.utils.make_grid(X[0, :num_images, 3, :, :])#Grab the depth map. The time dimension is on dim=1
+                    grid_X = torchvision.utils.make_grid(X[0, :, 3, :, :].unsqueeze(1))#Grab the depth map. The time dimension is on dim=1
                     trainer.logger.experiment.add_image('X_depth', grid_X, pl_module.global_step)
                     
                     grid_x = torchvision.utils.make_grid(x[0, :, :, :, :]/pl_module.out_channels)# The time dimension is on dim 1 grab only the first one

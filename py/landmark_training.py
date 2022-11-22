@@ -14,7 +14,6 @@ from landmark_callback import TeethNetImageLoggerLm
 from monai.transforms import Compose
 from ManageClass import RandomPickTeethTransform, RandomRotation,PickLandmarkTransform, MyCompose
 
-from pl_bolts.models.self_supervised import Moco_v2
 
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
@@ -31,7 +30,7 @@ def main(args):
 
     checkpoint_callback = ModelCheckpoint(
         dirpath=args.out,
-        filename='{epoch}-{val_loss:.2f}',
+        filename='{args.landmark}_{epoch}-{val_loss:.2f}',
         save_top_k=2,
         monitor='val_loss'
     )
@@ -81,17 +80,17 @@ if __name__ == '__main__':
 
 
     parser = argparse.ArgumentParser(description='Teeth challenge Training')
-    parser.add_argument('--csv_train', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/csv/train_LL1O.csv')    
-    parser.add_argument('--csv_valid', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/csv/val_LL1O.csv')
-    parser.add_argument('--csv_test', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/csv/test_LL1O.csv')      
+    parser.add_argument('--csv_train', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/csv/train_LL1O.csv')    
+    parser.add_argument('--csv_valid', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/csv/val_LL1O.csv')
+    parser.add_argument('--csv_test', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/csv/test_LL1O.csv')      
     parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='Learning rate')
     parser.add_argument('--log_every_n_steps', help='Log every n steps', type=int, default=10)    
     parser.add_argument('--epochs', help='Max number of epochs', type=int, default=500)    
     parser.add_argument('--model', help='Model to continue training', type=str, default= None)
-    parser.add_argument('--out', help='Output', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/model_out")
-    parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark")
+    parser.add_argument('--out', help='Output', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/model_out")
+    parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data_base")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
-    parser.add_argument('--batch_size', help='Batch size', type=int, default=2)    
+    parser.add_argument('--batch_size', help='Batch size', type=int, default=6)    
     parser.add_argument('--train_sphere_samples', help='Number of training sphere samples or views used during training and validation', type=int, default=4)    
     parser.add_argument('--patience', help='Patience for early stopping', type=int, default=30)
     parser.add_argument('--profiler', help='Use a profiler', type=str, default=None)
@@ -99,7 +98,7 @@ if __name__ == '__main__':
     parser.add_argument('--landmark',help='name of landmark to found',default='LL1O')
     
     
-    parser.add_argument('--tb_dir', help='Tensorboard output dir', type=str, default='/home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth/tensorboard')
+    parser.add_argument('--tb_dir', help='Tensorboard output dir', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/tensorboard')
     parser.add_argument('--tb_name', help='Tensorboard experiment name', type=str, default="monai")
 
 

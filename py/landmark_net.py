@@ -60,7 +60,7 @@ class TimeDistributed(nn.Module):
 
 
 class MonaiUNetHRes(pl.LightningModule):
-    def __init__(self, args = None, out_channels=2, in_channels = 4,class_weights=None, image_size=320, radius=1.01, subdivision_level=1, train_sphere_samples=4,prediction=False):
+    def __init__(self, args = None, out_channels=2, in_channels = 4,class_weights=None, image_size=320, radius=1.2, subdivision_level=1, train_sphere_samples=4,prediction=False):
 
         super(MonaiUNetHRes, self).__init__()        
         

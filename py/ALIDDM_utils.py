@@ -8,7 +8,6 @@ from sklearn.model_selection import train_test_split
 import random
 import matplotlib.pyplot as plt
 from tqdm import trange
-from kmeans_pytorch import kmeans
 from vtk import vtkMatrix4x4, vtkMatrix3x3, vtkPoints
 import torch
 import pandas as pd
@@ -36,6 +35,8 @@ from monai.transforms import (
 from shader import *
 import utils as utils
 from utils import GetColorArray
+
+from math import pi
 
 def numberTooth2Landmark(tooth):
     if isinstance(tooth,int):
@@ -322,7 +323,28 @@ def FocusTeeth(surf,surf_property,number_teeth,error_chose=False,unique_ids=[]):
 #         return landmarks_pos[:, 0:3]
 
 
-def get_landmarks_position(path,landmark, mean_arr, scale_factor,angle=None,vector=None):
+# def get_landmarks_position(path,landmark, mean_arr, scale_factor,angle=None,vector=None):
+
+#         data = json.load(open(os.path.join(path)))
+#         markups = data['markups']
+#         landmarks_lst = markups[0]['controlPoints']
+
+#         landmarks_pos = None
+#         # resc_landmarks_position = np.zeros([number_of_landmarks, 3])
+#         for lm in landmarks_lst:
+#             label = lm["label"]
+#             if label == landmark:
+#                 landmarks_pos = np.array(np.append(Downscale(lm["position"],mean_arr,scale_factor),1))
+#                 continue
+
+#         if angle:
+#             transform = GetTransform(angle,vector)
+#             transform_matrix = arrayFromVTKMatrix(transform.GetMatrix())
+#             landmarks_pos = np.matmul(transform_matrix,landmarks_pos.T).T
+#         return landmarks_pos[:3]
+
+
+def get_landmarks_position(path,landmark, mean_arr, scale_factor,rotation=None):
 
         data = json.load(open(os.path.join(path)))
         markups = data['markups']
@@ -333,14 +355,35 @@ def get_landmarks_position(path,landmark, mean_arr, scale_factor,angle=None,vect
         for lm in landmarks_lst:
             label = lm["label"]
             if label == landmark:
-                landmarks_pos = np.array(np.append(Downscale(lm["position"],mean_arr,scale_factor),1))
+                landmarks_pos = np.array(Downscale(lm["position"],mean_arr,scale_factor))
                 continue
 
-        if angle:
-            transform = GetTransform(angle,vector)
-            transform_matrix = arrayFromVTKMatrix(transform.GetMatrix())
-            landmarks_pos = np.matmul(transform_matrix,landmarks_pos.T).T
-        return landmarks_pos[:3]
+        if not rotation is None:
+            landmarks_pos= np.matmul(rotation,landmarks_pos.T).T
+        return landmarks_pos
+
+
+def get_landmarks_position2(path,matrix_rotation):
+
+        data = json.load(open(os.path.join(path)))
+        markups = data['markups']
+        landmarks_lst = markups[0]['controlPoints']
+
+        landmarks_position = {}
+        # resc_landmarks_position = np.zeros([number_of_landmarks, 3])
+          # resc_landmarks_position = np.zeros([number_of_landmarks, 3])
+        for landmark in landmarks_lst:
+
+
+
+
+            landmarks_pos = np.array(landmark["position"] )
+
+         
+            landmarks_pos = np.matmul(matrix_rotation,landmarks_pos.T).T
+
+            landmarks_position[landmark['label']] = landmarks_pos
+        return landmarks_position
 
 def pos_landmard2texture(vertex,landmark_pos):
     texture = torch.zeros_like(vertex.unsqueeze(0))
@@ -494,3 +537,101 @@ def removeversionfolder(path,name='version'):
     for dir in listdir :
         if os.path.isdir(os.path.join(path,dir)) and name in dir:
             os.system(f'rm -r {os.path.join(path,dir)}')
+
+
+
+def WriteLandmark(dic_landmark,path):
+    true = True
+    false = False
+
+    cp_list = []
+    model={
+                    "id": "1",
+                    "label": '',
+                    "description": "",
+                    "associatedNodeID": "",
+                    "position": [],
+                    "orientation": [-1.0, -0.0, -0.0, -0.0, -1.0, -0.0, 0.0, 0.0, 1.0],
+                    "selected": true,
+                    "locked": false,
+                    "visibility": true,
+                    "positionStatus": "defined"
+                }
+    for idx , (landmark, pos) in enumerate(dic_landmark.items()):
+        dic = model.copy()
+        dic['id'] = f'{idx+1}'
+        dic['label'] = f'{landmark}'
+        dic['position'] = pos.tolist()
+        cp_list.append(dic)
+
+    true = True
+    false = False
+    file = {
+        "@schema": "https://raw.githubusercontent.com/slicer/slicer/master/Modules/Loadable/Markups/Resources/Schema/markups-schema-v1.0.0.json#",
+        "markups": [
+        {
+            "type": "Fiducial",
+            "coordinateSystem": "LPS",
+            "locked": false,
+            "labelFormat": "%N-%d",
+            "controlPoints": cp_list,
+            "measurements": [],
+            "display": {
+                "visibility": false,
+                "opacity": 1.0,
+                "color": [0.4, 1.0, 0.0],
+                "selectedColor": [1.0, 0.5000076295109484, 0.5000076295109484],
+                "activeColor": [0.4, 1.0, 0.0],
+                "propertiesLabelVisibility": false,
+                "pointLabelsVisibility": true,
+                "textScale": 3.0,
+                "glyphType": "Sphere3D",
+                "glyphScale": 1.0,
+                "glyphSize": 5.0,
+                "useGlyphScale": true,
+                "sliceProjection": false,
+                "sliceProjectionUseFiducialColor": true,
+                "sliceProjectionOutlinedBehindSlicePlane": false,
+                "sliceProjectionColor": [1.0, 1.0, 1.0],
+                "sliceProjectionOpacity": 0.6,
+                "lineThickness": 0.2,
+                "lineColorFadingStart": 1.0,
+                "lineColorFadingEnd": 10.0,
+                "lineColorFadingSaturation": 1.0,
+                "lineColorFadingHueOffset": 0.0,
+                "handlesInteractive": false,
+                "snapMode": "toVisibleSurface"
+            }
+            }
+            ]
+            }
+
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(file, f, ensure_ascii=False, indent=4)
+    f.close
+
+
+
+
+def RandomRotation(surf):
+    alpha, beta , gamma  = np.random.random()*pi, np.random.random()*pi, np.random.random()*pi
+    Rx = np.array([[1,0,0],[0,np.cos(alpha),np.sin(alpha)],[0,-np.sin(alpha),np.cos(alpha)]])
+    Ry = np.array([[np.cos(beta),0,-np.sin(beta)],[0,1,0],[np.sin(beta),0,np.cos(beta)]])
+    Rz = np.array([[np.cos(gamma),np.sin(gamma),0],[-np.sin(gamma),np.cos(gamma),0],[0,0,1]])
+
+    matrix_rotation = np.matmul(Rx,Ry)
+    matrix_rotation = np.matmul(matrix_rotation,Rz)
+
+    vtkpoint = surf.GetPoints()
+    points = vtk_to_numpy(vtkpoint.GetData())
+    points = np.matmul(matrix_rotation,points.T).T
+
+
+    vpoints= vtkPoints()
+    vpoints.SetNumberOfPoints(points.shape[0])
+    for i in range(points.shape[0]):
+        vpoints.SetPoint(i,points[i])
+    surf.SetPoints(vpoints)
+
+    return surf, matrix_rotation
+    

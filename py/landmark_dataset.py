@@ -59,7 +59,7 @@ class TeethDataModuleLm(pl.LightningDataModule):
 
 
     def setup(self,stage =None):
-        self.train_ds = TeethDatasetLm(mount_point = self.mount_point, df = self.df_train,surf_property = self.surf_property,random=True,transform=self.train_transform,landmark=self.landmark)
+        self.train_ds = TeethDatasetLm(mount_point = self.mount_point, df = self.df_train,surf_property = self.surf_property,transform=self.train_transform,landmark=self.landmark)
         self.val_ds = TeethDatasetLm(mount_point = self.mount_point, df = self.df_val,surf_property = self.surf_property, transform=self.val_transform,landmark=self.landmark)
         self.test_ds = TeethDatasetLm(mount_point = self.mount_point, df = self.df_test,surf_property = self.surf_property,transform=self.test_transform,landmark=self.landmark)
 
@@ -96,17 +96,16 @@ class TeethDataModuleLm(pl.LightningDataModule):
 
 
 class TeethDatasetLm(Dataset):
-    def __init__(self,df,surf_property ,mount_point='',random=False,transform = False,landmark='',test=False):
+    def __init__(self,df,surf_property ,mount_point='',transform = False,landmark='',test=False,prediction=False):
         self.df = df
         self.mount_point = mount_point
 
         self.surf_property = surf_property
 
-        self.random = random
-        self.number_teeth = 10
         self.transform = transform
         self.landmark = landmark
         self.test = test
+        self.prediction= prediction
 
 
     def __len__(self):
@@ -117,33 +116,53 @@ class TeethDatasetLm(Dataset):
 
 
         surf = ReadSurf(os.path.join(self.mount_point,self.df.iloc[index]["surf"]))
-        
         if self.transform:
             surf, kwargs = self.transform(surf)
 
         surf = ComputeNormals(surf) 
-        if 'angle' in kwargs :
-            pos_landmark = get_landmarks_position(os.path.join(self.mount_point,self.df.iloc[index]["landmark"]),self.landmark,kwargs['mean'],1/kwargs['scale'],angle = kwargs['angle'], vector = kwargs['vector'])
-
-        else :
-            pos_landmark = get_landmarks_position(os.path.join(self.mount_point,self.df.iloc[index]["landmark"]),self.landmark,kwargs['mean'],1/kwargs['scale'])
+     
 
         V = torch.tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(torch.float32)
         F = torch.tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:]).to(torch.int64)
         CN = ToTensor(dtype=torch.float32)(vtk_to_numpy(GetColorArray(surf, "Normals"))/255.0)  
 
 
-        LF = pos_landmard2seg(V,pos_landmark)
-   
-        faces_pid0 = F[:,0:1]
-                  
-        LF = torch.take(LF, faces_pid0)            
 
-        LF = LF.to(torch.int64)
+
+        if not self.prediction :
+
+            if 'rotation' in kwargs :
+                pos_landmark = get_landmarks_position(os.path.join(self.mount_point,self.df.iloc[index]["landmark"]),self.landmark,kwargs['mean'],1/kwargs['scale'],rotation = kwargs['rotation'])
+
+            else :
+                pos_landmark = get_landmarks_position(os.path.join(self.mount_point,self.df.iloc[index]["landmark"]),self.landmark,kwargs['mean'],1/kwargs['scale'])
+
+
+            LF = pos_landmard2seg(V,pos_landmark)
+            faces_pid0 = F[:,0:1]       
+            LF = torch.take(LF, faces_pid0)            
+            LF = LF.to(torch.int64)
+
+            if self.test:
+                CL = pos_landmard2texture(V,pos_landmark)
+                return V, F, CN, CL
+            
+            if self.prediction:
+                return V, F, CN, LF
+            
+        else :
+
+            return V, F, CN , kwargs['mean'], kwargs['scale']
+
+
+            
+
 
         if self.test :
             CL = pos_landmard2texture(V,pos_landmark)
-            return V, F, CN, LF, CL
+            return V, F, CN, CL
+        
+
 
 
         return V, F, CN, LF
@@ -152,6 +171,13 @@ class TeethDatasetLm(Dataset):
     def getSurf(self,idx):
         surf = ReadSurf(os.path.join(self.mount_point,self.df.iloc[idx]["surf"]))
         return surf
+    
+    def getName(self,idx):
+        path = os.path.join(self.mount_point,self.df.iloc[idx]["surf"])
+        name = os.path.basename(path)
+        name , _ = os.path.splitext(name)
+
+        return name
 
 
 # class DatasetValidation(Dataset):

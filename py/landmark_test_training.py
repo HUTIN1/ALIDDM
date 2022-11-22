@@ -19,12 +19,14 @@ from monai.transforms import Compose
 
 from landmark_dataset import TeethDatasetLm
 from landmark_net import MonaiUNetHRes
-from ManageClass import RandomPickTeethTransform,RandomRotation, PickLandmarkTransform, MyCompose
+from ManageClass import RandomPickTeethTransform, PickLandmarkTransform, MyCompose, RandomRotation
 
 from ALIDDM_utils import image_grid,removeversionfolder
 import matplotlib.pyplot as plt
 # from azureml.core.run import Run
 # run = Run.get_context()
+from utils import WriteSurf
+import utils
 
 
 
@@ -50,51 +52,44 @@ def main(args):
     train_transfrom = MyCompose([PickLandmarkTransform(args.landmark,args.property),RandomRotation()])
     radius = 1.2
     model = MonaiUNetHRes(args, out_channels = 2, class_weights=class_weights, image_size=320, train_sphere_samples=args.train_sphere_samples,radius=radius)
-    train_ds  = TeethDatasetLm(mount_point = args.mount_point, df = df_train,surf_property = args.property,random=True,transform =train_transfrom,landmark=args.landmark )
+    train_ds  = TeethDatasetLm(mount_point = args.mount_point, df = df_train,surf_property = args.property,transform =train_transfrom,landmark=args.landmark ,test=True)
     dataloader = DataLoader(train_ds, batch_size=1, num_workers=args.num_workers, persistent_workers=True, pin_memory=True)
     
-    iterdata = iter(dataloader)
+
     device = torch.device('cuda')
 
     print("after get item")
     model.to(device)
 
-    data =next(iterdata)
 
     
-    V, F, CN, LF = data
 
-    V = V.to(device, non_blocking=True)
-    F = F.to(device, non_blocking=True)
-    CN = CN.to(device, non_blocking=True).to(torch.float32)
-    LF = LF.to(device, non_blocking=True)
+    iterdata= iter(dataloader)
+    data = next(iterdata)
 
-    x, X, PF = model((V, F, CN))
+    V, F, CN, CL = data
+    # V = V.squeeze(0)
+    # F = F.squeeze(0)
+    CL = CL.squeeze(0)
 
-    y = torch.take(LF, PF)*(PF>=0)
+    print('V.size()',V.size())
+    print('F.size()',F.size())
 
-    x = x.permute(0,2,1,3,4)
-    y = y.permute(0,2,1,3,4) 
-    print('x.size()',x.size())
-    print('y.size()',y.size())
+    radius = 1.2
+    sphere_verts = ico_sphere(1).verts_packed() * float(radius)
+    sphere =  Pointclouds(points=[sphere_verts])
 
-    loss = model.loss(x, y)
+    texture = TexturesVertex(CL)
 
-
-    # sphere_verts = ico_sphere(1).verts_packed() * float(radius)
-    # sphere =  Pointclouds(points=[sphere_verts])
-
-    # texture = TexturesVertex(CL)
-
-    # mesh = Meshes(verts=V,faces=F,textures=texture)
-    # fig = plot_scene({
-    # "subplot1": {
-    #     "mouth" : mesh,
-    #     'sphere':sphere
-    # }
-    # })
-    # fig.show()
-    # print("fait")
+    mesh = Meshes(verts=V,faces=F,textures=texture)
+    fig = plot_scene({
+    "subplot1": {
+        "mouth" : mesh,
+        'sphere':sphere
+    }
+    })
+    fig.show()
+    print("fait")
 
 
     # image_grid(y[...,:3].cpu().numpy(),rows=4,cols=3)
@@ -108,15 +103,15 @@ def main(args):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Teeth challenge Training')
-    parser.add_argument('--csv_train', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/csv/train_LL1CB.csv')    
-    parser.add_argument('--csv_valid', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/csv/val_LL1CB.csv')
-    parser.add_argument('--csv_test', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/csv/test_LL1CB.csv')      
+    parser.add_argument('--csv_train', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/csv/train_LL1CB.csv')    
+    parser.add_argument('--csv_valid', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/csv/val_LL1CB.csv')
+    parser.add_argument('--csv_test', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/csv/test_LL1CB.csv')      
     parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='Learning rate')
     parser.add_argument('--log_every_n_steps', help='Log every n steps', type=int, default=10)    
     parser.add_argument('--epochs', help='Max number of epochs', type=int, default=200)    
     parser.add_argument('--model', help='Model to continue training', type=str, default= None)
-    parser.add_argument('--out', help='Output', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/model_out")
-    parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark")
+    parser.add_argument('--out', help='Output', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Test/random_rotation")
+    parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data_base")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
     parser.add_argument('--batch_size', help='Batch size', type=int, default=2)    
     parser.add_argument('--train_sphere_samples', help='Number of training sphere samples or views used during training and validation', type=int, default=4)    

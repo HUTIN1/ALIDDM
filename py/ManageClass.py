@@ -7,6 +7,7 @@ from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 from monai.transforms import ToTensor
 
 from ALIDDM_utils import MeanScale, TransformVTK
+import ALIDDM_utils
 import utils
 
 
@@ -33,9 +34,8 @@ class UnitSurfTransform:
 class RandomRotation:
     def __call__(self,surf):
         kwargs={}
-        surf , angle , vector = utils.RandomRotation(surf)
-        kwargs['angle']=angle
-        kwargs['vector']=vector
+        surf , rotation = ALIDDM_utils.RandomRotation(surf)
+        kwargs['rotation']=rotation
         return  surf , kwargs
 
 

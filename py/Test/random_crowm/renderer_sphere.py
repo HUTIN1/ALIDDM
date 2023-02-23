@@ -29,7 +29,7 @@ sys.path.append(mymodule_dir)
 import ManageClass  as MC
 from ALIDDM_utils import  MeanScale, isRotationMatrix, image_grid, numberTooth2Landmark,pos_landmard2texture, Downscale
 from utils import GetColorArray, ComputeNormals, RandomRotation, GetTransform
-from Rendering import ALIIOSRendering
+
 
 
 

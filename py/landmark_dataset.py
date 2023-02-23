@@ -113,11 +113,16 @@ class TeethDatasetLm(Dataset):
         return len(self.df)
 
     def __getitem__(self, index) :
+        if isinstance(self.df,list):
+            surf = ReadSurf(self.df[index])
 
+        else :
 
-        surf = ReadSurf(os.path.join(self.mount_point,self.df.iloc[index]["surf"]))
+            surf = ReadSurf(os.path.join(self.mount_point,self.df.iloc[index]["surf"]))
+
         if self.transform:
             surf, kwargs = self.transform(surf)
+
 
         surf = ComputeNormals(surf) 
      
@@ -131,8 +136,8 @@ class TeethDatasetLm(Dataset):
 
         if not self.prediction :
 
-            if 'rotation' in kwargs :
-                pos_landmark = get_landmarks_position(os.path.join(self.mount_point,self.df.iloc[index]["landmark"]),self.landmark,kwargs['mean'],1/kwargs['scale'],rotation = kwargs['rotation'])
+            if 'angle' in kwargs :
+                pos_landmark = get_landmarks_position(os.path.join(self.mount_point,self.df.iloc[index]["landmark"]),self.landmark,kwargs['mean'],1/kwargs['scale'],angle = kwargs['angle'],vector=kwargs['vector'])
 
             else :
                 pos_landmark = get_landmarks_position(os.path.join(self.mount_point,self.df.iloc[index]["landmark"]),self.landmark,kwargs['mean'],1/kwargs['scale'])
@@ -145,22 +150,13 @@ class TeethDatasetLm(Dataset):
 
             if self.test:
                 CL = pos_landmard2texture(V,pos_landmark)
+                # CL = pos_landmard2seg(V,pos_landmark)
                 return V, F, CN, CL
             
-            if self.prediction:
-                return V, F, CN, LF
             
         else :
 
             return V, F, CN , kwargs['mean'], kwargs['scale']
-
-
-            
-
-
-        if self.test :
-            CL = pos_landmard2texture(V,pos_landmark)
-            return V, F, CN, CL
         
 
 
@@ -169,11 +165,17 @@ class TeethDatasetLm(Dataset):
 
 
     def getSurf(self,idx):
-        surf = ReadSurf(os.path.join(self.mount_point,self.df.iloc[idx]["surf"]))
+        if isinstance(self.df,list):
+            surf = ReadSurf(self.df[idx])
+        else :
+            surf = ReadSurf(os.path.join(self.mount_point,self.df.iloc[idx]["surf"]))
         return surf
     
     def getName(self,idx):
-        path = os.path.join(self.mount_point,self.df.iloc[idx]["surf"])
+        if isinstance(self.df,list):
+            path = self.df[idx]
+        else :
+            path = os.path.join(self.mount_point,self.df.iloc[idx]["surf"])
         name = os.path.basename(path)
         name , _ = os.path.splitext(name)
 

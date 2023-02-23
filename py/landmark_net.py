@@ -195,7 +195,10 @@ class MonaiUNetHRes(pl.LightningModule):
         y = torch.take(LF, PF)*(PF>=0)
 
         x = x.permute(0,2,1,3,4)
-        y = y.permute(0,2,1,3,4) 
+        y = y.permute(0,2,1,3,4)
+        print('x.shape',x.shape)
+        print('y.shape',y.shape)
+
         loss = self.loss(x, y)
 
         batch_size = V.shape[0]

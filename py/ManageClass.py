@@ -34,8 +34,9 @@ class UnitSurfTransform:
 class RandomRotation:
     def __call__(self,surf):
         kwargs={}
-        surf , rotation = ALIDDM_utils.RandomRotation(surf)
-        kwargs['rotation']=rotation
+        surf , angle, vector = utils.RandomRotation(surf)
+        kwargs['angle']=angle
+        kwargs['vector'] = vector
         return  surf , kwargs
 
 
@@ -47,7 +48,10 @@ class PickTeethTransform:
 
     def __call__(self, surf,tooth):
         kwargs ={}
-        region_id = tensor((vtk_to_numpy(surf.GetPointData().GetScalars(self.surf_property))),dtype=torch.int64)
+        try :
+            region_id = tensor((vtk_to_numpy(surf.GetPointData().GetScalars(self.surf_property))),dtype=torch.int64)
+        except:
+            region_id = tensor((vtk_to_numpy(surf.GetPointData().GetScalars('Universal_ID'))),dtype=torch.int64)
 
         crown_ids = torch.argwhere(region_id == tooth).reshape(-1)
         verts = vtk_to_numpy(surf.GetPoints().GetData())

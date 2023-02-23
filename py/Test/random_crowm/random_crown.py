@@ -28,7 +28,7 @@ from random import choice
 import os 
 import sys
 script_dir = os.path.dirname(__file__)
-mymodule_dir = os.path.join(script_dir,'..','..','Tools')
+mymodule_dir = os.path.join(script_dir,'..','..')
 sys.path.append(mymodule_dir)
 from utils import RandomRotation, GetColorArray
 from ALIDDM_utils import FocusTeeth

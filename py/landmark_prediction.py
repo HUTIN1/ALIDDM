@@ -14,8 +14,10 @@ from landmark_dataset import TeethDatasetLm
 from ManageClass import IterTeeth, PickLandmarkTransform
 from ALIDDM_utils import WriteLandmark
 import utils
-
+import cv2
+from ALIDDM_utils import image_grid
 from vtk.util.numpy_support import  numpy_to_vtk
+import matplotlib.pyplot as plt
 
 
 
@@ -28,11 +30,12 @@ def main(args):
     class_weights = None
     out_channels = 2
 
-    model = MonaiUNetHRes(args, out_channels = 2, class_weights=class_weights, image_size=320, train_sphere_samples=4)
+    model = MonaiUNetHRes(args, out_channels = 2, class_weights=class_weights, image_size=320, train_sphere_samples=4, subdivision_level=2,radius=1.6)
 
     model.load_state_dict(torch.load(args.model)['state_dict'])
 
-    df = pd.read_csv(os.path.join(mount_point, args.csv))
+    df =utils.search(args.input,'.vtk')['.vtk']
+
 
     ds = TeethDatasetLm(df,args.array_name, mount_point = args.mount_point,landmark=args.landmark,transform=PickLandmarkTransform(args.landmark,args.array_name),prediction=True)
 
@@ -63,9 +66,11 @@ def main(args):
 
 
             x, X, PF = model((V, F, CN))
+            
+
 
             x = softmax(x*(PF>=0))
-            
+
 
             PF = PF.squeeze()
             x = x.squeeze()
@@ -82,10 +87,13 @@ def main(args):
 
             V_landmark_ids = torch.argwhere(V_labels_prediction).squeeze(-1)
 
+
             landmark_pos = torch.mean(V[:,V_landmark_ids,:],1)
             name = ds.getName(idx)
 
-            WriteLandmark(landmark_pos*scale+mean,args.out,args.landmark,name)
+            dic={args.landmark:landmark_pos*scale+mean}
+
+            WriteLandmark(dic,os.path.join(args.out,f'{name}_{args.landmark}.json'))
 
 
 
@@ -94,13 +102,13 @@ if __name__ == '__main__':
 
 
     parser = argparse.ArgumentParser(description='Teeth challenge prediction')
-    parser.add_argument('--csv', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/CSV/Prediction_LL1O.csv')    
-    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/model/LL1O_model.ckpt")
+    parser.add_argument('--input',help='path folder',type=str,default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Test_jaw/jaw')      
+    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Model/model_test/LL1CB_epoch=599-val_loss=1.28.ckpt")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
-    parser.add_argument('--out', help='Output', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/json")
-    parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/jaw")
+    parser.add_argument('--out', help='Output', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Test_jaw/jaw_json_42images/LL1CB')
+    parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/jaw_upper")
     parser.add_argument('--array_name',type=str, help = 'Predicted ID array name for output vtk', default="PredictedID")
-    parser.add_argument('--landmark',default='LL1O')
+    parser.add_argument('--landmark',default='LL1CB')
 
 
     args = parser.parse_args()

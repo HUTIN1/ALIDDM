@@ -43,8 +43,10 @@ def main(args):
 
     # class_weights = np.load(os.path.join(mount_point, 'train_weights.npy'))
     class_weights = None
-
-    model = MonaiUNetHRes(args, out_channels = 2, class_weights=class_weights, image_size=320, train_sphere_samples=args.train_sphere_samples)
+    if args.load_checkpoint :
+        model = MonaiUNetHRes.load_from_checkpoint(args.load_checkpoint)
+    else :
+        model = MonaiUNetHRes(args, out_channels = 2, class_weights=class_weights, image_size=320, train_sphere_samples=args.train_sphere_samples)
 
     train_transfrom = MyCompose([PickLandmarkTransform(args.landmark,args.property),RandomRotation()])
 
@@ -90,12 +92,13 @@ if __name__ == '__main__':
     parser.add_argument('--out', help='Output', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/model_out")
     parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data_base")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
-    parser.add_argument('--batch_size', help='Batch size', type=int, default=6)    
+    parser.add_argument('--batch_size', help='Batch size', type=int, default=10)    
     parser.add_argument('--train_sphere_samples', help='Number of training sphere samples or views used during training and validation', type=int, default=4)    
     parser.add_argument('--patience', help='Patience for early stopping', type=int, default=30)
     parser.add_argument('--profiler', help='Use a profiler', type=str, default=None)
     parser.add_argument('--property', help='label of segmentation', type=str, default="PredictedID")
     parser.add_argument('--landmark',help='name of landmark to found',default='LL1O')
+    parser.add_argument('--load_checkpoint')
     
     
     parser.add_argument('--tb_dir', help='Tensorboard output dir', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/tensorboard')

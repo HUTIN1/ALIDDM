@@ -84,12 +84,15 @@ class MonaiUNetHRes(pl.LightningModule):
             num_res_units=2,
         )
         self.model = TimeDistributed(unet)
-        if prediction:
-            ico_verts, ico_faces = utils.PolyDataToTensors(utils.CreateIcosahedron(radius=radius, sl=subdivision_level))
-            ico_verts = ico_verts.to(torch.float32)
-        else :
-            ico_verts = torch.tensor([[1,0,0]]).to(torch.float32)*float(radius)
+        # if prediction:
+        #     ico_verts, ico_faces = utils.PolyDataToTensors(utils.CreateIcosahedron(radius=radius, sl=subdivision_level))
+        #     ico_verts = ico_verts.to(torch.float32)
+        # else :
+        #     ico_verts = torch.tensor([[1,0,0]]).to(torch.float32)*float(radius)
 
+
+        ico_verts, ico_faces = utils.PolyDataToTensors(utils.CreateIcosahedron(radius=radius, sl=subdivision_level))
+        ico_verts = ico_verts.to(torch.float32)
         for idx, v in enumerate(ico_verts):
             if (torch.abs(torch.sum(v)) == radius):
                 ico_verts[idx] = v + torch.normal(0.0, 1e-7, (3,))

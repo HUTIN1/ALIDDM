@@ -3,12 +3,13 @@ from net_GCN import MeshSeg, MeshSegbis
 import torch
 from net_GCN import GraphFeatureEncoder, get_mlp_layers
 from torch import nn
+from time import sleep
 
 
 
 
 class GCNNet(pl.LightningModule):
-    def __init__(self, lr,batch_size) -> None:
+    def __init__(self, lr=1e-4,batch_size=1) -> None:
         super(GCNNet,self).__init__()
 
         self.save_hyperparameters()
@@ -73,7 +74,10 @@ class GCNNet(pl.LightningModule):
 
         self.log('val_loss',loss, batch_size=self.batch_size)
         acc = self.accuracy(out,val_batch.segmentation_labels)
-        self.log('train_acc',acc,batch_size=self.batch_size)
+        self.log('val_acc',acc,batch_size=self.batch_size)
+
+    def validation_epoch_end(self, *args, **kwargs) -> None:
+        sleep(1)
 
 
     def test_step(self, test_batch, batch_idx):

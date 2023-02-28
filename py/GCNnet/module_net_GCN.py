@@ -9,10 +9,11 @@ from time import sleep
 
 
 class GCNNet(pl.LightningModule):
-    def __init__(self, lr=1e-4,batch_size=1) -> None:
+    def __init__(self, lr=1e-4,batch_size=1,num_classes=2) -> None:
         super(GCNNet,self).__init__()
 
         self.save_hyperparameters()
+        # self.register_buffer("num_classes", num_classes)
 
         self.input_encoder = None
 
@@ -28,13 +29,13 @@ class GCNNet(pl.LightningModule):
         #     apply_batch_norm=True,
         # )
         self.lr = lr 
-        self.net = MeshSeg( in_features=3,
+        self.net = MeshSeg( in_features=6,
             encoder_features=16,
             conv_channels=[32, 64, 128, 64],
             encoder_channels=[16],
             decoder_channels=[32],
-            num_classes=2,
-            num_heads=2,
+            num_classes=num_classes,
+            num_heads=num_classes,
             apply_batch_norm=True)
 
 
@@ -77,7 +78,7 @@ class GCNNet(pl.LightningModule):
         self.log('val_acc',acc,batch_size=self.batch_size)
 
     def validation_epoch_end(self, *args, **kwargs) -> None:
-        sleep(1)
+        sleep(2.5)
 
 
     def test_step(self, test_batch, batch_idx):

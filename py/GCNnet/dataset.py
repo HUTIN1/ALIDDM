@@ -13,11 +13,12 @@ import vtk
 import json
 import glob
 from torch_geometric.nn import knn_graph
+from utils_GCN import ComputeNormals, GetColorArray, MeanScale, ReadSurf, Downscale, get_landmarks_position, segmentationLandmarks
 
 
 
 class DataModuleGCN(pl.LightningDataModule):
-    def __init__(self,train_csv,val_csv,test_csv,landmark, batch_size, transform,num_worker = 4, drop_last = False) -> None:
+    def __init__(self,train_csv,val_csv,test_csv,landmark, batch_size,radius, transform,num_worker = 4, drop_last = False) -> None:
         self.train_csv = train_csv
         self.val_csv = val_csv
         self.test_csv = test_csv
@@ -29,16 +30,17 @@ class DataModuleGCN(pl.LightningDataModule):
         self.prepare_data_per_node = None
         self._log_hyperparams = None
         self.transform = transform
+        self.radius = radius
 
 
 
     def setup(self, stage = None) -> None:
-        # self.train_ds = DatasetGCN(self.train_csv, self.landmark,self.transform)
-        # self.val_ds = DatasetGCN(self.val_csv, self.landmark,self.transform)
-        # self.test_ds = DatasetGCN(self.test_csv , self.landmark,self.transform)
-        self.train_ds = DatasetGCNSegTeeth(self.train_csv, self.landmark,self.transform)
-        self.val_ds = DatasetGCNSegTeeth(self.val_csv, self.landmark,self.transform)
-        self.test_ds = DatasetGCNSegTeeth(self.test_csv , self.landmark,self.transform)
+        # self.train_ds = DatasetGCN(self.train_csv, self.landmark,self.transform,self.radius)
+        # self.val_ds = DatasetGCN(self.val_csv, self.landmark,self.transform,self.radius)
+        # self.test_ds = DatasetGCN(self.test_csv , self.landmark,self.transform,self.radius)
+        self.train_ds = DatasetGCNSegTeeth(self.train_csv, self.landmark,self.transform,self.radius)
+        self.val_ds = DatasetGCNSegTeeth(self.val_csv, self.landmark,self.transform,self.radius)
+        self.test_ds = DatasetGCNSegTeeth(self.test_csv , self.landmark,self.transform,self.radius)
 
     def train_dataloader(self) :
         return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers =self.num_worker, pin_memory = True, persistent_workers = True, drop_last = self.drop_last )
@@ -55,10 +57,11 @@ class DataModuleGCN(pl.LightningDataModule):
 
 
 class DatasetGCN(Dataset):
-    def __init__(self,path,landmark,transfrom) -> None:
+    def __init__(self,path,landmark,transfrom,radius) -> None:
         self.df = self.setup(path)
         self.landmark = landmark
         self.transform = transfrom
+        self.radius = radius
 
 
     def setup(self,path):
@@ -70,89 +73,32 @@ class DatasetGCN(Dataset):
     
     def __getitem__(self, index) :
         mounth = '/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data/data_base/'
-        surf = self.ReadSurf(os.path.join(mounth,self.df.iloc[index]['surf']))
+        surf = ReadSurf(os.path.join(mounth,self.df.iloc[index]['surf']))
 
         V = tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(float32)
         F = tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:]).to(int64)
         
 
-        mean , scale = self.MeanScale(verts = V)
+        mean , scale = MeanScale(verts = V)
         
-        V = (V - tensor(mean))/tensor(scale)
+
+        V = Downscale(V,mean, scale)
+        # V = (V - tensor(mean))/tensor(scale)
 
 
 
         data = Data(x= V , face = F.t())
 
-        landmark_pos = self.get_landmarks_position(os.path.join(mounth,self.df.iloc[index]['landmark']),self.landmark,mean,scale)
-        data.segmentation_labels = self.segmentation(V,landmark_pos)
+        landmark_pos = get_landmarks_position(os.path.join(mounth,self.df.iloc[index]['landmark']),self.landmark,mean,scale)
+        data.segmentation_labels = segmentationLandmarks(V,landmark_pos,self.radius)
 
         data = self.transform(data)
 
         return data
 
 
-    def segmentation(self,vertex , landmark_pos):
-        texture = torch.zeros(size=(vertex.shape[0],1),dtype=int64)
-        vertex = vertex.to(torch.float64)
-        radius = 0.01
-
-
-        landmark_pos = tensor(np.array(landmark_pos)).unsqueeze(0)
-        distance = torch.cdist(landmark_pos,vertex,p=2)
-        minvalue = torch.min(distance)
-        distance = distance - minvalue
-        _, index_pos_land = torch.nonzero((distance<radius),as_tuple=True)
-        for i in index_pos_land:
-
-            texture[i]=1
-        return texture
-    
-    def ReadSurf(self,path):
-
-
-        fname, extension = os.path.splitext(path)
-        extension = extension.lower()
-        if extension == ".vtk":
-            reader = vtk.vtkPolyDataReader()
-            reader.SetFileName(path)
-            reader.Update()
-            surf = reader.GetOutput()
-
-        return surf
     
 
-    def get_landmarks_position(self,path,landmark, mean_arr, scale_factor):
-
-        data = json.load(open(os.path.join(path)))
-        markups = data['markups']
-        landmarks_lst = markups[0]['controlPoints']
-
-        landmarks_pos = None
-        # resc_landmarks_position = np.zeros([number_of_landmarks, 3])
-        for lm in landmarks_lst:
-            label = lm["label"]
-            if label == landmark:
-                landmarks_pos = np.array(self.Downscale(lm["position"],mean_arr,scale_factor),)
-                continue
-        
-        return landmarks_pos
-    
-
-    def Downscale(self,pos_center,mean_arr,scale_factor):
-        landmarks_position = (pos_center - mean_arr) / scale_factor
-        return landmarks_position
-    
-
-    def MeanScale(self,verts = None):
-
-        min_coord = torch.min(verts,0)[0]
-        max_coord= torch.max(verts,0)[0]
-        mean = (max_coord + min_coord)/2.0
-        mean= mean.numpy()
-        scale = np.linalg.norm(max_coord.numpy() - mean)
-
-        return mean, scale
     
     def getName(self,index):
         return self.df.iloc[index]['surf']
@@ -160,28 +106,28 @@ class DatasetGCN(Dataset):
     def getLandmark(self,index):
 
         mounth = '/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data/data_base/'
-        surf = self.ReadSurf(os.path.join(mounth,self.df.iloc[index]['surf']))
+        surf = ReadSurf(os.path.join(mounth,self.df.iloc[index]['surf']))
 
         V = tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(float32)
         # F = tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:]).to(int64)
         
 
-        mean , scale = self.MeanScale(verts = V)
+        mean , scale = MeanScale(verts = V)
         
-        V = (V - tensor(mean))/tensor(scale)
+        V = Downscale(V,mean,scale)
 
 
-
-
-        landmark_pos = self.get_landmarks_position(os.path.join(mounth,self.df.iloc[index]['landmark']),self.landmark,mean,scale)
+        landmark_pos = get_landmarks_position(os.path.join(mounth,self.df.iloc[index]['landmark']),self.landmark,mean,scale)
 
         return landmark_pos
     
 
 
+
+
 class DatasetGCNSegTeeth(DatasetGCN):
-    def __init__(self, path, landmark, transfrom) -> None:
-        super().__init__(path, landmark, transfrom)
+    def __init__(self, path, landmark, transfrom,radius) -> None:
+        super().__init__(path, landmark, transfrom,radius)
         self.dic = {'UL7CL': 15, 'UL7CB': 15, 'UL7O': 15, 'UL7DB': 15, 'UL7MB': 15, 'UL7R': 15, 'UL7RIP': 15, 'UL7OIP': 15,
          'UL6CL': 14, 'UL6CB': 14, 'UL6O': 14, 'UL6DB': 14, 'UL6MB': 14, 'UL6R': 14, 'UL6RIP': 14, 'UL6OIP': 14,
          'UL5CL': 13, 'UL5CB': 13, 'UL5O': 13, 'UL5DB': 13, 'UL5MB': 13, 'UL5R': 13, 'UL5RIP': 13, 'UL5OIP': 13, 
@@ -212,33 +158,69 @@ class DatasetGCNSegTeeth(DatasetGCN):
 
     def __getitem__(self, index):
         mounth = '/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data/data_base/'
-        surf = self.ReadSurf(os.path.join(mounth,self.df.iloc[index]['surf']))
+        surf = ReadSurf(os.path.join(mounth,self.df.iloc[index]['surf']))
+        surf = ComputeNormals(surf)
 
         V = tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(float32)
         F = tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:]).to(int64)
+        CN = tensor(vtk_to_numpy(GetColorArray(surf, "Normals"))/255.0,dtype=torch.float32)  
+        region_id = tensor((vtk_to_numpy(surf.GetPointData().GetScalars("PredictedID"))),dtype=torch.int64)
+        crown_ids = torch.argwhere(region_id == self.dic[self.landmark]).reshape(-1)
+
+
+        verts_crown = V[crown_ids]
+        CN = CN[crown_ids]
+
+
+        mean , scale = MeanScale(verts = verts_crown)
+
+        verts_crown = Downscale(verts_crown,mean, scale)
+        
+        # verts_crown = (verts_crown - tensor(mean))*tensor(scale)
+
+        edge_index = knn_graph(verts_crown, k = 7)
+
+
+        x = torch.cat((verts_crown,CN),dim=-1)
+        data = Data(x= x , edge_index=edge_index)
+
+        landmark_pos = get_landmarks_position(os.path.join(mounth,self.df.iloc[index]['landmark']),self.landmark,mean,scale)
+        data.segmentation_labels = segmentationLandmarks(verts_crown,landmark_pos,self.radius)
+
+        # data = self.transform(data)
+
+        return data
+
+    def getLandmark(self,index):
+
+        mounth = '/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data/data_base/'
+        surf = ReadSurf(os.path.join(mounth,self.df.iloc[index]['surf']))
+
+        V = tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(float32)
         region_id = tensor((vtk_to_numpy(surf.GetPointData().GetScalars("PredictedID"))),dtype=torch.int64)
         crown_ids = torch.argwhere(region_id == self.dic[self.landmark]).reshape(-1)
 
 
         verts_crown = V[crown_ids]
 
-
-        mean , scale = self.MeanScale(verts = verts_crown)
+        # F = tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:]).to(int64)
         
-        verts_crown = (verts_crown - tensor(mean))/tensor(scale)
 
-        edge_index = knn_graph(verts_crown, k = 7)
+        mean , scale = MeanScale(verts = verts_crown)
+        
+        V = Downscale(V,mean,scale)
 
 
-        data = Data(x= verts_crown , edge_index=edge_index)
+        landmark_pos = get_landmarks_position(os.path.join(mounth,self.df.iloc[index]['landmark']),self.landmark,mean,scale)
 
-        landmark_pos = self.get_landmarks_position(os.path.join(mounth,self.df.iloc[index]['landmark']),self.landmark,mean,scale)
-        data.segmentation_labels = self.segmentation(verts_crown,landmark_pos)
+        return landmark_pos
 
-        # data = self.transform(data)
-
-        return data
     
+
+
+
+
+
 class DatasetGCNSegTeethPrediction(DatasetGCNSegTeeth):
     def __init__(self, path, landmark, transfrom) -> None:
         self.landmark = landmark
@@ -312,8 +294,10 @@ class DatasetGCNSegTeethPrediction(DatasetGCNSegTeeth):
 
 
         mean , scale = self.MeanScale(verts = verts_crown)
+
+        verts_crown = self.Downscale(verts_crown,mean,scale)
         
-        verts_crown = (verts_crown - tensor(mean))/tensor(scale)
+        # verts_crown = (verts_crown - tensor(mean))/tensor(scale)
 
         edge_index = knn_graph(verts_crown, k = 7)
 
@@ -327,6 +311,10 @@ class DatasetGCNSegTeethPrediction(DatasetGCNSegTeeth):
         name , _ = os.path.splitext(os.path.basename(file))
         return name
    
+
+
+
+
 
 
 
@@ -368,7 +356,9 @@ class DatasetGCNPrecdition(DatasetGCN):
 
         mean , scale = self.MeanScale(verts = V)
         
-        V = (V - tensor(mean))/tensor(scale)
+        # V = (V - tensor(mean))/tensor(scale)
+
+        V = self.Downscale(V,mean,scale)
 
 
         data = Data(x= V , face = F.t())

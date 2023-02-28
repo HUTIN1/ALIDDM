@@ -15,8 +15,10 @@ from pytorch3d.renderer import TexturesVertex
 from pytorch3d.structures import Meshes, Pointclouds
 from pytorch3d.vis.plotly_vis import  plot_scene
 from pytorch3d.utils import ico_sphere
+import numpy as np
+import polyscope as ps
 
-def ListToMesh(list,radius=0.05):
+def ListToMesh(list,radius=0.01):
     print(f' list listtomesh {list}')
     list_verts =[]
     list_faces = []
@@ -36,7 +38,7 @@ def ListToMesh(list,radius=0.05):
 def main(args):
     
 
-    model = GCNNet()
+    model = GCNNet(num_classes=2)
 
     model.load_state_dict(torch.load(args.model)['state_dict'])
 
@@ -73,21 +75,31 @@ def main(args):
             x = pred_segmentation.argmax(dim = -1, keepdim = True).squeeze()
             # print(f'x ; {x}, size {x.shape}')
 
-
+            print(f' unique x :{torch.unique(x)}')
             where = torch.argwhere(x)
             # print(f'where : {where}, shape {where.shape}')
+            if where.shape[0] == 0:
+                print(f'dont found landmark {args.landmark}, for this patient: {ds.getName(idx)}')
+                continue
+            
             # pos  = torch.take(data.x,where)
             pos = data.x[where].squeeze()
+
+            if len(pos.shape) == 1 :
+                pos = pos.unsqueeze(0)
+
+
+
 
 
             # print(f'pos : {pos}, size : {pos.shape}')
             landmark_pos = torch.mean(pos,0).unsqueeze(0)
-            # print(f'landmakr pos : {landmark_pos}, data : {data}')
+            print(f'landmakr pos : {landmark_pos}, data : {data}')
 
             
             distance = torch.cdist(landmark_pos,data.x,p=2)
             minvarg = torch.argmin(distance)
-            # print(f'minvarg : {minvarg}, distance {distance}')
+            print(f'minvarg : {minvarg}, distance {distance}')
             landmark_pos = data.x[minvarg]
             
 
@@ -101,23 +113,37 @@ def main(args):
 
             WriteLandmark(dic,os.path.join(args.out,f'{name}_{args.landmark}.json'))
 
-            texture = torch.zeros((data.x.shape[0],data.x.shape[1]),device=device)
+            # texture = torch.zeros((data.x.shape[0],data.x.shape[1]),device=device)
 
 
-            texture[...,0] = torch.where(x == 0 ,0,255)
-            texture[...,1] = torch.where(x == 0 ,0,255)
-            texture[...,2] = torch.where(x == 0 ,0,255)
-            texture = TexturesVertex(texture.unsqueeze(0))
+            # texture[...,0] = torch.where(x == 0 ,0,255)
+            # texture[...,1] = torch.where(x == 0 ,0,255)
+            # texture[...,2] = torch.where(x == 0 ,0,255)
+            # # # texture = TexturesVertex(texture.unsqueeze(0))
 
-            mesh = Meshes(verts=data.x.unsqueeze(0),faces=data.face.t().unsqueeze(0),textures=texture)
+            # # # mesh = Meshes(verts=data.x.unsqueeze(0),faces=data.face.t().unsqueeze(0),textures=texture)
+            # # # print(f'pos : {pos}, pos shape : {pos.shape}, pos true : {pos.shape[0] == 0}')
 
-            fig = plot_scene({'subplot 1':{
-                'mesh':mesh,
-                'landmark':ListToMesh([landmark_pos.cpu().tolist()])
-            }})
+            # # # fig = plot_scene({'subplot 1':{
+            # # #     'mesh':mesh,
+            # # #     # 'landmark':ListToMesh([pos.cpu().tolist()])
+            # # # }})
 
-            fig.show()
-            quit()
+
+            # points = Pointclouds(pos.unsqueeze(0))
+            # mesh = Pointclouds(data.x.unsqueeze(0))
+            # fig = plot_scene({'subplot 1':{
+            #     'mesh':mesh,
+            #     'point':points,
+            #     # 'landmark':ListToMesh([pos.squeeze(0).cpu().tolist()])
+            # }})
+
+            # fig.show()
+            # quit()
+
+            # ps.init()
+            # points = data.x
+
 
 
 
@@ -128,12 +154,12 @@ if __name__ == '__main__':
 
 
     parser = argparse.ArgumentParser(description='Teeth challenge prediction')
-    parser.add_argument('--input',help='path folder',type=str,default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Scan/Or/scan_Or')      
-    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/GCN/model/all_teeth/gcn_loss=0.00_epoch=493_raidus=0.01.ckpt")
+    parser.add_argument('--input',help='path folder',type=str,default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/scan_train/scan')      
+    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Downloads/args.landmark=0_epoch=906-val_loss=0.01.ckpt")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
-    parser.add_argument('--out', help='Output', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Scan/Or/scan_Or_json_GCN/')
+    parser.add_argument('--out', help='Output', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/random_scan/json/')
     parser.add_argument('--array_name',type=str, help = 'Predicted ID array name for output vtk', default="PredictedID")
-    parser.add_argument('--landmark',default='LL1O')
+    parser.add_argument('--landmark',default='LL')
 
 
     args = parser.parse_args()

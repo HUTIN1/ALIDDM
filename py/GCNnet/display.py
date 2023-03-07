@@ -16,6 +16,7 @@ from pytorch3d.vis.plotly_vis import  plot_scene
 from torch_geometric.transforms import FaceToEdge
 from pytorch3d.utils import ico_sphere
 from typing import Union
+from pytorch3d.transforms import random_rotation
 
 def ListToMesh(list,radius=0.05):
     list_verts =[]
@@ -45,8 +46,8 @@ def main(args):
 
 
 
-    ds = DatasetGCNSegTeeth(args.csv_train,landmark=args.landmark[0],transfrom=None,radius=args.radius)
-    # ds = DatasetGCN(path = args.csv_train, landmark=args.landmark, transfrom=FaceToEdge(remove_faces=False),radius=args.radius)
+    # ds = DatasetGCNSegTeeth(args.csv_train,landmark=args.landmark[0],transfrom=None,radius=args.radius)
+    ds = DatasetGCN(path = args.csv_train, landmark=args.landmark, transfrom=FaceToEdge(remove_faces=False),radius=args.radius)
 
     # dataloader = DataLoader(ds, batch_size=1, num_workers =args.num_workers, pin_memory = True, persistent_workers = True )
 
@@ -55,7 +56,8 @@ def main(args):
     print(f'name :{ds.getName(0)}')
     print(f'data {data}')
 
-    vertex = data.x[...,:3]
+    # vertex = data.x[...,:3]
+    vertex = data.x
 
     texture = torch.zeros((vertex.shape[0],vertex.shape[1]),device=device)
     x = data.segmentation_labels.squeeze()
@@ -84,10 +86,26 @@ def main(args):
     print(f'post landmark {pos_landmark}, mean x : {torch.mean(vertex,0)} ')
 
 
+
+
+
+
+
+    data2 = ds[1].to(device)
+    # vertex2 = data2.x[...,:3]
+    vertex2 = data2.x
+    matrix_rotation = random_rotation(device=device)
+    # vertex2 = vertex2.t()
+    # print(f'vertex2 {vertex2.shape}, {vertex2}')
+    # vertex2 =torch.matmul( matrix_rotation,  vertex2).t()
+    mesh2 = Pointclouds(vertex2.unsqueeze(0))
+
+
     fig = plot_scene({'subplot 1':{
         'mesh':mesh,
         # 'landmakr' : ListToMesh(pos_landmark),
-        'point':points
+        'point':points,
+        'mesh2' : mesh2
     }})
 
 

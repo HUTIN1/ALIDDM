@@ -130,7 +130,8 @@ def ReadSurf(path):
     return surf
 
 
-def get_landmarks_position(path,landmark, mean_arr, scale_factor):
+def get_landmarks_position(path,landmark, mean_arr, scale_factor,matrix_rotation = np.identity(3)):
+    matrix_rotation = np.array(matrix_rotation)
     if isinstance(landmark,str):
         landmark = [landmark]
 
@@ -143,7 +144,10 @@ def get_landmarks_position(path,landmark, mean_arr, scale_factor):
     for lm in landmarks_lst:
         label = lm["label"]
         if label in landmark:
-            landmarks_pos.append(np.array(Downscale(lm["position"],mean_arr,scale_factor),))
+            position = lm["position"]
+            position = np.squeeze(np.matmul(matrix_rotation,np.expand_dims(position,0).T).T)
+            position = Downscale(position,mean_arr,scale_factor)
+            landmarks_pos.append(position)
     
     return landmarks_pos
 

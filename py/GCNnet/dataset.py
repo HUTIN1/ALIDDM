@@ -3,6 +3,7 @@ from torch_geometric.loader import DataLoader
 from torch_geometric.data import Data
 from torch.utils.data import Dataset
 from torch import tensor, float32, int64
+from pytorch3d.transforms import random_rotation
 import torch
 
 from vtk.util.numpy_support import vtk_to_numpy
@@ -43,10 +44,10 @@ class DataModuleGCN(pl.LightningDataModule):
         self.test_ds = DatasetGCNSegTeeth(self.test_csv , self.landmark,self.transform,self.radius)
 
     def train_dataloader(self) :
-        return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers =self.num_worker, pin_memory = True, persistent_workers = True, drop_last = self.drop_last )
+        return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers =self.num_worker, pin_memory = True, persistent_workers = True, drop_last = self.drop_last , shuffle=True)
     
     def val_dataloader(self) :
-        return DataLoader(self.val_ds, batch_size=self.batch_size, num_workers =self.num_worker, pin_memory = True, persistent_workers = True, drop_last = self.drop_last)
+        return DataLoader(self.val_ds, batch_size=self.batch_size, num_workers =self.num_worker, pin_memory = True, persistent_workers = True, drop_last = self.drop_last, shuffle=True)
     
     def test_dataloader(self) :
         return DataLoader(self.test_ds, batch_size=1, num_workers =self.num_worker, pin_memory = True, persistent_workers = True, drop_last = self.drop_last)
@@ -78,6 +79,9 @@ class DatasetGCN(Dataset):
         V = tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(float32)
         F = tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:]).to(int64)
         
+        matrix_rotation = random_rotation()
+        V = torch.matmul(matrix_rotation,V.t()).t()
+        
 
         mean , scale = MeanScale(verts = V)
         
@@ -89,7 +93,7 @@ class DatasetGCN(Dataset):
 
         data = Data(x= V , face = F.t())
 
-        landmark_pos = get_landmarks_position(os.path.join(mounth,self.df.iloc[index]['landmark']),self.landmark,mean,scale)
+        landmark_pos = get_landmarks_position(os.path.join(mounth,self.df.iloc[index]['landmark']),self.landmark,mean,scale,matrix_rotation=matrix_rotation)
         data.segmentation_labels = segmentationLandmarks(V,landmark_pos,self.radius)
 
         data = self.transform(data)
@@ -282,27 +286,31 @@ class DatasetGCNSegTeethPrediction(DatasetGCNSegTeeth):
 
 
 
-        surf = self.ReadSurf(self.list_files[index])
+        surf = ReadSurf(self.list_files[index])
+        # print(f'surf {surf}')
+        surf = ComputeNormals(surf)
 
         V = tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(float32)
         F = tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:]).to(int64)
-        region_id = tensor((vtk_to_numpy(surf.GetPointData().GetScalars("PredictedID"))),dtype=torch.int64)
+        CN = tensor(vtk_to_numpy(GetColorArray(surf, "Normals"))/255.0,dtype=torch.float32)
+        region_id = tensor(vtk_to_numpy(surf.GetPointData().GetScalars("PredictedID")),dtype=torch.int64)
         crown_ids = torch.argwhere(region_id == self.dic[self.landmark]).reshape(-1)
 
 
         verts_crown = V[crown_ids]
+        CN = CN[crown_ids]
 
 
-        mean , scale = self.MeanScale(verts = verts_crown)
+        mean , scale = MeanScale(verts = verts_crown)
 
-        verts_crown = self.Downscale(verts_crown,mean,scale)
+        verts_crown = Downscale(verts_crown,mean,scale)
         
         # verts_crown = (verts_crown - tensor(mean))/tensor(scale)
 
         edge_index = knn_graph(verts_crown, k = 7)
 
 
-        data = Data(x= verts_crown , edge_index=edge_index)
+        data = Data(x= torch.cat((verts_crown,CN),dim=-1) , edge_index=edge_index)
 
         return data ,tensor(mean), tensor(scale)
     
@@ -349,19 +357,21 @@ class DatasetGCNPrecdition(DatasetGCN):
         return len(self.list_files)
     
     def __getitem__(self, index) :
-        surf = self.ReadSurf(self.list_files[index])
+        surf = ReadSurf(self.list_files[index])
+        surf = ComputeNormals(surf)
 
         V = tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(float32)
         F = tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:]).to(int64)
+        CN = tensor(vtk_to_numpy(GetColorArray(surf, "Normals"))/255.0,dtype=torch.float32)
 
-        mean , scale = self.MeanScale(verts = V)
+        mean , scale = MeanScale(verts = V)
         
         # V = (V - tensor(mean))/tensor(scale)
 
-        V = self.Downscale(V,mean,scale)
+        V = Downscale(V,mean,scale)
 
 
-        data = Data(x= V , face = F.t())
+        data = Data(x= torch.cat((V,CN),dim=-1) , face = F.t())
 
         data = self.transform(data)
 

@@ -15,7 +15,7 @@ def main(args):
 
     checkpoint_callback = ModelCheckpoint(
         dirpath=args.out,
-        filename=f'{args.landmark}_radius={args.radius}'+'_{epoch}-{val_loss:.2f}',
+        filename=f'{args.landmark}_radius={args.radius}'+'_{epoch}-{val_loss:.3f}',
         save_top_k=2,
         monitor='val_loss'
     )
@@ -23,7 +23,7 @@ def main(args):
     if args.load_checkpoint :
         model = GCNNet.load_from_checkpoint(args.load_checkpoint)
     else :
-        model = GCNNet(lr = args.lr, batch_size=args.batch_size,num_classes = 2)
+        model = GCNNet(lr = args.lr, batch_size=args.batch_size,num_classes = 2,in_features=6)
 
     transform = FaceToEdge(remove_faces=False)
 

@@ -38,7 +38,7 @@ def ListToMesh(list,radius=0.05):
 def main(args):
     
 
-    model = GCNNet()
+    model = GCNNet(in_features=3,batch_size=2)
 
     # model.load_state_dict(torch.load(args.model)['state_dict'])
     device = torch.device('cuda')
@@ -49,7 +49,15 @@ def main(args):
     # ds = DatasetGCNSegTeeth(args.csv_train,landmark=args.landmark[0],transfrom=None,radius=args.radius)
     ds = DatasetGCN(path = args.csv_train, landmark=args.landmark, transfrom=FaceToEdge(remove_faces=False),radius=args.radius)
 
-    # dataloader = DataLoader(ds, batch_size=1, num_workers =args.num_workers, pin_memory = True, persistent_workers = True )
+
+    dataloader = DataLoader(ds, batch_size=1, num_workers =args.num_workers, pin_memory = True, persistent_workers = True )
+
+
+    for batch in dataloader :
+
+        out = model(batch)
+        print(f'loss : {model.loss(out,batch)}')
+    quit()
 
     data = ds[0].to(device)
     pos_landmark = [ds.getLandmark(0)]
@@ -131,7 +139,7 @@ if __name__ == '__main__':
     parser.add_argument('--out', help='Output', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Scan/Or/scan_Or_json_GCN_segteeth/')
     parser.add_argument('--array_name',type=str, help = 'Predicted ID array name for output vtk', default="PredictedID")
     parser.add_argument('--radius',help='radius of landmark on mesh',default=0.1)
-    parser.add_argument('--landmark',type= Union[str,list],default=['LL1O','LL2O'])
+    parser.add_argument('--landmark',type= Union[str,list],default=['LL1O'])
 
 
     args = parser.parse_args()

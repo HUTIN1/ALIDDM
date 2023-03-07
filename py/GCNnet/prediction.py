@@ -38,7 +38,7 @@ def ListToMesh(list,radius=0.01):
 def main(args):
     
 
-    model = GCNNet(num_classes=9,in_features=6)
+    model = GCNNet(num_classes=2,in_features=6)
 
     model.load_state_dict(torch.load(args.model)['state_dict'])
 
@@ -101,7 +101,7 @@ def main(args):
             
             distance = torch.cdist(landmark_pos,vertex,p=2)
             minvarg = torch.argmin(distance)
-            print(f'minvarg : {minvarg}, distance {distance}')
+            # print(f'minvarg : {minvarg}, distance {distance}')
             landmark_pos = vertex[minvarg]
             
 
@@ -115,33 +115,33 @@ def main(args):
 
             WriteLandmark(dic,os.path.join(args.out,f'{name}_{args.landmark}.json'))
 
-            # texture = torch.zeros((vertex.shape[0],vertex.shape[1]),device=device)
+            texture = torch.zeros((vertex.shape[0],vertex.shape[1]),device=device)
 
 
-            # texture[...,0] = torch.where(x == 0 ,0,255)
-            # texture[...,1] = torch.where(x == 0 ,0,255)
-            # texture[...,2] = torch.where(x == 0 ,0,255)
-            # # # texture = TexturesVertex(texture.unsqueeze(0))
+            texture[...,0] = torch.where(x == 0 ,0,255)
+            texture[...,1] = torch.where(x == 0 ,0,255)
+            texture[...,2] = torch.where(x == 0 ,0,255)
+            # # texture = TexturesVertex(texture.unsqueeze(0))
 
-            # # # mesh = Meshes(verts=data.x.unsqueeze(0),faces=data.face.t().unsqueeze(0),textures=texture)
-            # # # print(f'pos : {pos}, pos shape : {pos.shape}, pos true : {pos.shape[0] == 0}')
+            # # mesh = Meshes(verts=data.x.unsqueeze(0),faces=data.face.t().unsqueeze(0),textures=texture)
+            # # print(f'pos : {pos}, pos shape : {pos.shape}, pos true : {pos.shape[0] == 0}')
 
-            # # # fig = plot_scene({'subplot 1':{
-            # # #     'mesh':mesh,
-            # # #     # 'landmark':ListToMesh([pos.cpu().tolist()])
-            # # # }})
+            # # fig = plot_scene({'subplot 1':{
+            # #     'mesh':mesh,
+            # #     # 'landmark':ListToMesh([pos.cpu().tolist()])
+            # # }})
 
 
-            # points = Pointclouds(pos.unsqueeze(0))
-            # mesh = Pointclouds(vertex.unsqueeze(0))
-            # fig = plot_scene({'subplot 1':{
-            #     'mesh':mesh,
-            #     'point':points,
-            #     # 'landmark':ListToMesh([pos.squeeze(0).cpu().tolist()])
-            # }})
+            points = Pointclouds(pos.unsqueeze(0))
+            mesh = Pointclouds(vertex.unsqueeze(0))
+            fig = plot_scene({'subplot 1':{
+                'mesh':mesh,
+                'point':points,
+                # 'landmark':ListToMesh([pos.squeeze(0).cpu().tolist()])
+            }})
 
-            # fig.show()
-            # quit()
+            fig.show()
+            quit()
 
 
 
@@ -153,11 +153,11 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Teeth challenge prediction')
     parser.add_argument('--input',help='path folder',type=str,default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/random_scan/scan/')      
-    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Downloads/['L2RM', 'R2RM', 'R3RM', 'L3RM', 'R3RL', 'L3RL', 'PRP', 'LPR']_radius=0.02_epoch=491-val_loss=0.07normal_use.ckpt")
+    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Downloads/['L2RM']_radius=0.04_epoch=40-val_loss=0.043.ckpt")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
     parser.add_argument('--out', help='Output', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/random_scan/json')
     parser.add_argument('--array_name',type=str, help = 'Predicted ID array name for output vtk', default="PredictedID")
-    parser.add_argument('--landmark',default='LL1O')
+    parser.add_argument('--landmark',default='L2RM')
 
 
     args = parser.parse_args()

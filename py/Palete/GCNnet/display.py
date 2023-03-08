@@ -53,11 +53,7 @@ def main(args):
     dataloader = DataLoader(ds, batch_size=1, num_workers =args.num_workers, pin_memory = True, persistent_workers = True )
 
 
-    for batch in dataloader :
 
-        out = model(batch)
-        print(f'loss : {model.loss(out,batch)}')
-    quit()
 
     data = ds[0].to(device)
     pos_landmark = [ds.getLandmark(0)]

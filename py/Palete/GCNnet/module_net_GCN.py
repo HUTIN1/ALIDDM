@@ -42,7 +42,7 @@ class GCNNet(pl.LightningModule):
 
 
 
-        # self.loss = torch.nn.CrossEntropyLoss()
+        self.loss = torch.nn.CrossEntropyLoss()
         self.batch_size = batch_size
 
     def configure_optimizers(self):
@@ -97,13 +97,5 @@ class GCNNet(pl.LightningModule):
         return float(correct_assignments / num_assignemnts)
     
 
-    def loss(self,out,batch):
-        pred = out.argmax(dim = -1, keepdim = True).squeeze()
-        where = torch.argwhere(pred)
-        vertex = batch.x
-        pos = vertex[where]
-        pos_mean = torch.mean(pos,0)
-        loss = torch.norm(pos_mean-batch.pos)
-        return loss
 
         

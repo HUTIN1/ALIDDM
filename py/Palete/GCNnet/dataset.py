@@ -96,8 +96,6 @@ class DatasetGCN(Dataset):
         landmark_pos = get_landmarks_position(os.path.join(mounth,self.df.iloc[index]['landmark']),self.landmark,mean,scale,matrix_rotation=matrix_rotation)
         data.segmentation_labels = segmentationLandmarks(V,landmark_pos,self.radius)
         
-        data.pos = torch.tensor(landmark_pos)
-
 
         data = self.transform(data)
 

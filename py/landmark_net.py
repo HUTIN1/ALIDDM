@@ -90,7 +90,7 @@ class MonaiUNetHRes(pl.LightningModule):
         ico_verts = ico_verts.to(torch.float32)
 
         for idx, v in enumerate(ico_verts):
-            if (torch.abs(torch.sum(v)) == radius):
+            # if (torch.abs(torch.sum(v)) == radius):
                 ico_verts[idx] = v + torch.normal(0.0, 1e-7, (3,))
 
         

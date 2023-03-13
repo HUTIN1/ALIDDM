@@ -72,6 +72,7 @@ def main(args):
     # train_transfrom = MyCompose([PickLandmarkTransform(args.landmark,args.property)])
     radius = 1.6
     model = MonaiUNetHRes(args, out_channels = 2, class_weights=class_weights, image_size=320, train_sphere_samples=args.train_sphere_samples,radius=radius)
+    quit()
     train_ds  = TeethDatasetLm(mount_point = args.mount_point, df = df_train,surf_property = args.property,transform =train_transfrom,landmark=args.landmark ,test=True)
     dataloader = DataLoader(train_ds, batch_size=1, num_workers=args.num_workers, persistent_workers=True, pin_memory=True)
     

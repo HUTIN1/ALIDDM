@@ -10,6 +10,7 @@ from pytorch_lightning.strategies.ddp import DDPStrategy
 import torch
 import os
 from torch_geometric.transforms import FaceToEdge
+from ManageClass import UnitSurfTransform
 from typing import Union
 def main(args):
 
@@ -34,7 +35,8 @@ def main(args):
                                 num_worker=args.num_workers,
                                 batch_size=args.batch_size,
                                 transform = transform,
-                                radius=args.radius)
+                                radius=args.radius,
+                                surf_transform=UnitSurfTransform())
     
     early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=args.patience, verbose=True, mode="min")
 
@@ -68,7 +70,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='GCN neural network Identification Landmark')
     parser.add_argument('--csv_train', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data/csv/train_LL1O.csv')    
     parser.add_argument('--csv_valid', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data/csv/val_LL1O.csv')
-    parser.add_argument('--csv_test', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data/csv/test_LL1O.csv')      
+    parser.add_argument('--csv_test', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data/csv/test_LL1O.csv')  
+    parser.add_argument('--mouth_path',default='/home/luciacev/Desktop/Data/IOSReg/renamed_segmented/')    
     parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='Learning rate')
     parser.add_argument('--log_every_n_steps', help='Log every n steps', type=int, default=10)    
     parser.add_argument('--epochs', help='Max number of epochs', type=int, default=500)    

@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from torch import int64, tensor
 import os
+from vtk.util.numpy_support import vtk_to_numpy
 
 def WriteLandmark(dic_landmark,path):
     true = True
@@ -130,27 +131,23 @@ def ReadSurf(path):
     return surf
 
 
-def get_landmarks_position(path,landmark, mean_arr, scale_factor,matrix_rotation = np.identity(3)):
-    matrix_rotation = np.array(matrix_rotation)
-    if isinstance(landmark,str):
-        landmark = [landmark]
+def get_landmarks_position(path,landmarks, matrix):
 
-    data = json.load(open(os.path.join(path)))
-    markups = data['markups']
-    landmarks_lst = markups[0]['controlPoints']
+        data = json.load(open(os.path.join(path)))
+        markups = data['markups']
+        landmarks_lst = markups[0]['controlPoints']
 
-    landmarks_pos = []
-    # resc_landmarks_position = np.zeros([number_of_landmarks, 3])
-    for lm in landmarks_lst:
-        label = lm["label"]
-        if label in landmark:
-            position = lm["position"]
-            position = np.squeeze(np.matmul(matrix_rotation,np.expand_dims(position,0).T).T)
-            position = Downscale(position,mean_arr,scale_factor)
-            landmarks_pos.append(position)
-    
-    return landmarks_pos
+        landmarks_pos = []
+        tmp_dic_landmark = {}
+        for lm in landmarks_lst :
+            tmp_dic_landmark[lm['label']] = lm['position']
 
+
+        for landmark in landmarks :
+                landmark_pos = np.matmul(matrix,np.append(tmp_dic_landmark[landmark],1).T).T
+                landmarks_pos.append(landmark_pos[:3])        
+
+        return landmarks_pos
 
 def Downscale(pos_center,mean_arr,scale_factor):
     landmarks_position = (pos_center - mean_arr) / scale_factor
@@ -166,3 +163,170 @@ def MeanScale(verts = None):
     scale = np.linalg.norm(max_coord.numpy() - mean)
 
     return mean, scale
+
+
+
+def RemoveBase(surf=None,vertex=None):
+    '''
+    To use this function it mandatory to have oriented the surf/vertex and unitsurf
+    '''
+    if surf is not None :
+        V = torch.tensor(vtk_to_numpy(surf.GetPoints().GetData()))
+    else :
+        V = vertex
+
+    mean = torch.mean(V,dim=0)
+
+
+    arg = torch.argsort(V[...,0],dim=0)[10]
+
+    new_tensor = []
+    pos_max = V[arg]
+    pos_max2 = pos_max[2]
+    list_index = []
+    print(f'pos max {pos_max}')
+    for index , v in enumerate(V) :
+        if v[2] > pos_max2 or  torch.dist(v,mean) < 0.4:
+            new_tensor.append(v.unsqueeze(0))
+            list_index.append(torch.tensor(index))
+
+             
+    new_tensor = torch.cat(new_tensor,dim=0)
+    list_index = torch.tensor(list_index)
+
+    new_tensor2 = []
+    list_index2 = []
+    arg = torch.argsort(new_tensor[...,2],dim=0)[0]
+    print(f'args {arg}, new tensor {new_tensor.shape}' )
+    minargs = new_tensor[arg,2] + torch.tensor(0.1)
+    for index , v in zip(list_index,new_tensor):
+        if v[2] > minargs:
+            new_tensor2.append(v.unsqueeze(0))
+            list_index2.append(index)
+
+    new_tensor2 = torch.cat(new_tensor2,dim=0)
+    list_index2 = torch.tensor(list_index2)
+    print(f'list index {list_index2}')
+    return new_tensor2, list_index2
+
+
+def MatrixScale(scale):
+    return np.array([[scale,0,0,0],
+                     [0, scale ,0 ,0],
+                     [0, 0, scale ,0],
+                     [0, 0, 0, 1]])
+
+def MatrixTranspose(transpose):
+    return np.array([[1 , 0, 0, transpose[0]],
+                     [0, 1, 0, transpose[1]],
+                     [0 ,0,1, transpose[2]],
+                     [0, 0, 0, 1]])
+
+
+def TransformSurf(surf,matrix):
+    assert isinstance(surf,vtk.vtkPolyData)
+    surf_copy = vtk.vtkPolyData()
+    surf_copy.DeepCopy(surf)
+    surf = surf_copy
+
+    transform = vtk.vtkTransform()
+    transform.SetMatrix(np.reshape(matrix,16))
+    surf = RotateTransform(surf,transform)
+    return surf
+
+
+def RotationMatrix(axis, theta):
+    """
+    Return the rotation matrix associated with counterclockwise rotation about
+    the given axis by theta radians.
+
+    Parameters
+    ----------
+    axis : np.array
+        Axis of rotation
+    theta : float
+        Angle of rotation in radians
+    
+    Returns
+    -------
+    np.array
+        Rotation matrix
+    """
+
+    axis = np.asarray(axis)
+    axis = axis / np.linalg.norm(axis)
+    a = np.cos(theta / 2.0)
+    b, c, d = -axis * np.sin(theta / 2.0)
+    aa, bb, cc, dd = a * a, b * b, c * c, d * d
+    bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
+    return np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
+                    [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
+                    [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
+
+
+
+def RotateTransform(surf, transform):
+
+    transformFilter = vtk.vtkTransformPolyDataFilter()
+    transformFilter.SetTransform(transform)
+    transformFilter.SetInputData(surf)
+    transformFilter.Update()
+    return transformFilter.GetOutput()
+
+
+def GetUnitSurf(surf, mean_arr = None, scale_factor = None):
+  surf, surf_mean, surf_scale = ScaleSurf(surf, mean_arr, scale_factor)
+  return surf, surf_mean, surf_scale
+
+
+
+def ScaleSurf(surf, mean_arr = None, scale_factor = None):
+
+    surf_copy = vtk.vtkPolyData()
+    surf_copy.DeepCopy(surf)
+    surf = surf_copy
+
+
+    shapedatapoints = surf.GetPoints()
+
+    #calculate bounding box
+    mean_v = [0.0] * 3
+    bounds_max_v = [0.0] * 3
+
+    bounds = shapedatapoints.GetBounds()
+
+    mean_v[0] = (bounds[0] + bounds[1])/2.0
+    mean_v[1] = (bounds[2] + bounds[3])/2.0
+    mean_v[2] = (bounds[4] + bounds[5])/2.0
+    bounds_max_v[0] = max(bounds[0], bounds[1])
+    bounds_max_v[1] = max(bounds[2], bounds[3])
+    bounds_max_v[2] = max(bounds[4], bounds[5])
+
+    shape_points = []
+    for i in range(shapedatapoints.GetNumberOfPoints()):
+        p = shapedatapoints.GetPoint(i)
+        shape_points.append(p)
+    shape_points = np.array(shape_points)
+    
+    #centering points of the shape
+    if mean_arr is None:
+        mean_arr = np.array(mean_v)
+    # print("Mean:", mean_arr)
+    shape_points = shape_points - mean_arr
+
+    #Computing scale factor if it is not provided
+    if(scale_factor is None):
+        bounds_max_arr = np.array(bounds_max_v)
+        scale_factor = 1/np.linalg.norm(bounds_max_arr - mean_arr)
+
+    #scale points of the shape by scale factor
+    # print("Scale:", scale_factor)
+    shape_points_scaled = np.multiply(shape_points, scale_factor)
+
+    #assigning scaled points back to shape
+    for i in range(shapedatapoints.GetNumberOfPoints()):
+       shapedatapoints.SetPoint(i, shape_points_scaled[i])    
+
+    surf.SetPoints(shapedatapoints)
+
+    return surf, mean_arr, scale_factor

@@ -91,7 +91,8 @@ class MonaiUNetHRes(pl.LightningModule):
         # ico_verts = torch.tensor([[x.item(),y.item(),0.75] for x in a for y in a]).to(torch.float32)
         # matrix_rotation = torch.tensor(utils.RotationMatrix(np.array([1,0,0]),np.array(3.1415/8))).to(torch.float32)
         # ico_verts = torch.matmul(matrix_rotation,ico_verts.t()).t()
-        ico_verts, ico_faces = utils.PolyDataToTensors(utils.CreateIcosahedron(radius=1, sl=2))
+        ico_verts, ico_faces = utils.PolyDataToTensors(utils.CreateIcosahedron(radius=1, sl=1))
+        print(f'number point {ico_verts.shape}')
         ico_list = []
         for ico in ico_verts :
             if ico[1] < 0.1 and ico[2]< 0.5:

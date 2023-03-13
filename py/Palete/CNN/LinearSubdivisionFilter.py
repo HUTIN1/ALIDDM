@@ -40,6 +40,7 @@ class LinearSubdivisionFilter:
 			# Iterate over the cells in the polydata
 			# The idea is to linearly divide every cell according to the subdivision level
 			for cellid in range(inputpolydata.GetNumberOfCells()):
+				print(f'cellib :{cellid}')
 				idlist = vtk.vtkIdList()
 				inputpolydata.GetCellPoints(cellid, idlist)
 				

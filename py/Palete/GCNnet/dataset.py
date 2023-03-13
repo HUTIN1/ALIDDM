@@ -14,12 +14,13 @@ import vtk
 import json
 import glob
 from torch_geometric.nn import knn_graph
-from utils_GCN import ComputeNormals, GetColorArray, MeanScale, ReadSurf, Downscale, get_landmarks_position, segmentationLandmarks
-
+from utils_GCN import ComputeNormals, GetColorArray, MeanScale, ReadSurf, Downscale, get_landmarks_position, segmentationLandmarks, RemoveBase
+from icp import PrePreAso
+from segmented_from_point import Segmentation
 
 
 class DataModuleGCN(pl.LightningDataModule):
-    def __init__(self,train_csv,val_csv,test_csv,landmark, batch_size,radius, transform,num_worker = 4, drop_last = False) -> None:
+    def __init__(self,train_csv,val_csv,test_csv,landmark, batch_size,radius, transform,surf_transform,num_worker = 4, drop_last = False,mouth_path='.') -> None:
         self.train_csv = train_csv
         self.val_csv = val_csv
         self.test_csv = test_csv
@@ -32,16 +33,18 @@ class DataModuleGCN(pl.LightningDataModule):
         self._log_hyperparams = None
         self.transform = transform
         self.radius = radius
+        self.surf_transform = surf_transform
+        self.mouth_path = mouth_path
 
 
 
     def setup(self, stage = None) -> None:
-        # self.train_ds = DatasetGCN(self.train_csv, self.landmark,self.transform,self.radius)
-        # self.val_ds = DatasetGCN(self.val_csv, self.landmark,self.transform,self.radius)
-        # self.test_ds = DatasetGCN(self.test_csv , self.landmark,self.transform,self.radius)
-        self.train_ds = DatasetGCNSegTeeth(self.train_csv, self.landmark,self.transform,self.radius)
-        self.val_ds = DatasetGCNSegTeeth(self.val_csv, self.landmark,self.transform,self.radius)
-        self.test_ds = DatasetGCNSegTeeth(self.test_csv , self.landmark,self.transform,self.radius)
+        self.train_ds = DatasetGCN(self.train_csv, self.landmark,self.transform,self.radius,self.surf_transform,mouth_path = self.mouth_path,surf_transfrom=self.surf_transform)
+        self.val_ds = DatasetGCN(self.val_csv, self.landmark,self.transform,self.radius,self.surf_transform,mouth_path = self.mouth_path,surf_transfrom=self.surf_transform)
+        self.test_ds = DatasetGCN(self.test_csv , self.landmark,self.transform,self.radius,self.surf_transform,mouth_path = self.mouth_path,surf_transfrom=self.surf_transform)
+        # self.train_ds = DatasetGCNSegTeeth(self.train_csv, self.landmark,self.transform,self.radius)
+        # self.val_ds = DatasetGCNSegTeeth(self.val_csv, self.landmark,self.transform,self.radius)
+        # self.test_ds = DatasetGCNSegTeeth(self.test_csv , self.landmark,self.transform,self.radius)
 
     def train_dataloader(self) :
         return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers =self.num_worker, pin_memory = True, persistent_workers = True, drop_last = self.drop_last , shuffle=True)
@@ -58,11 +61,11 @@ class DataModuleGCN(pl.LightningDataModule):
 
 
 class DatasetGCN(Dataset):
-    def __init__(self,path,landmark,transfrom,radius) -> None:
+    def __init__(self,path,landmark,radius, surf_transfrom) -> None:
         self.df = self.setup(path)
         self.landmark = landmark
-        self.transform = transfrom
         self.radius = radius
+        self.surf_transform = surf_transfrom
 
 
     def setup(self,path):
@@ -73,31 +76,37 @@ class DatasetGCN(Dataset):
         return len(self.df)
     
     def __getitem__(self, index) :
-        mounth = '/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data/data_base/'
+        mounth = '/home/luciacev/Desktop/Data/IOSReg/renamed_segmented/'
+
         surf = ReadSurf(os.path.join(mounth,self.df.iloc[index]['surf']))
+       
+        matrix = np.eye(4)
+        surf, matrix_or = PrePreAso(surf,[[-0.5,-0.5,0],[0,0.5,0],[0.5,-0.5,0]],['4','9','10','15'])
+        matrix = np.matmul(matrix_or,matrix)
+        if self.surf_transform :
+            surf , matrix_transfrom = self.surf_transform(surf)
+            matrix = np.matmul(matrix_transfrom,matrix)
+
+        surf = ComputeNormals(surf)
 
         V = tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(float32)
         F = tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:]).to(int64)
-        
-        matrix_rotation = random_rotation()
-        V = torch.matmul(matrix_rotation,V.t()).t()
-        
+        CN = tensor(vtk_to_numpy(GetColorArray(surf, "Normals"))/255.0,dtype=torch.float32)  
 
-        mean , scale = MeanScale(verts = V)
+
         
 
-        V = Downscale(V,mean, scale)
-        # V = (V - tensor(mean))/tensor(scale)
+        
 
-
-
-        data = Data(x= V , face = F.t())
-
-        landmark_pos = get_landmarks_position(os.path.join(mounth,self.df.iloc[index]['landmark']),self.landmark,mean,scale,matrix_rotation=matrix_rotation)
+        landmark_pos = get_landmarks_position(os.path.join(mounth,self.df.iloc[index]['landmark']),self.landmark,matrix = matrix)
+        
+        V, index = Segmentation(landmark_pos, vertex = V2)
+        CN  = CN[index , :]
+        edge_index = knn_graph(V, k = 7)
+        VCN = torch.cat((V,CN),dim=-1)
+        data = Data(x= VCN , edge_index=edge_index )
         data.segmentation_labels = segmentationLandmarks(V,landmark_pos,self.radius)
         
-
-        data = self.transform(data)
 
         return data
 
@@ -110,25 +119,100 @@ class DatasetGCN(Dataset):
     
     def getLandmark(self,index):
 
-        mounth = '/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data/data_base/'
+        mounth = '/home/luciacev/Desktop/Data/IOSReg/renamed_segmented/'
         surf = ReadSurf(os.path.join(mounth,self.df.iloc[index]['surf']))
 
         V = tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(float32)
         # F = tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:]).to(int64)
         
+        matrix = np.eye(4)
+        if self.surf_transform :
+            surf , matrix_transform = self.surf_transform(surf)
+            matrix = np.matmul(matrix,matrix_transform)
 
-        mean , scale = MeanScale(verts = V)
-        
-        V = Downscale(V,mean,scale)
-
-
-        landmark_pos = get_landmarks_position(os.path.join(mounth,self.df.iloc[index]['landmark']),self.landmark,mean,scale)
+        landmark_pos = get_landmarks_position(os.path.join(mounth,self.df.iloc[index]['landmark']),self.landmark,matrix=matrix)
 
         return landmark_pos
     
 
+class DatasetGCNSeg():
+    def __init__(self,path,landmark,radius, surf_transfrom,mouth_path) -> None:
+        self.df = self.setup(path)
+        self.landmark = landmark
+        self.radius = radius
+        self.surf_transform = surf_transfrom
+        self.mouth_path = mouth_path
 
 
+    def setup(self,path):
+        return pd.read_csv(path)
+    
+
+    def __len__(self):
+        return len(self.df)
+    
+    def __getitem__(self, index) :
+
+
+        surf = ReadSurf(os.path.join(self.mouth_path,self.df.iloc[index]['surf']))
+       
+        matrix = np.eye(4)
+        surf, matrix_or = PrePreAso(surf,[[-0.5,-0.5,0],[0,0.5,0],[0.5,-0.5,0]],['4','9','10','15'])
+        matrix = np.matmul(matrix_or,matrix)
+        if self.surf_transform :
+            surf , matrix_transfrom = self.surf_transform(surf)
+            matrix = np.matmul(matrix_transfrom,matrix)
+
+        surf = ComputeNormals(surf)
+
+        V = tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(float32)
+        F = tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:]).to(int64)
+        CN = tensor(vtk_to_numpy(GetColorArray(surf, "Normals"))/255.0,dtype=torch.float32) 
+    
+
+
+        
+
+        
+
+        landmark_pos = get_landmarks_position(os.path.join(self.mouth_path,self.df.iloc[index]['landmark']),self.landmark,matrix = matrix)
+
+
+        V2, index_remove_base = RemoveBase(vertex=V)
+        V_segmented, index = Segmentation(landmark_pos, vertex = V2)
+        segmentation_labels = torch.zeros((V2.shape[0],1))
+
+        segmentation_labels[index,:] = torch.ones((index.shape[0],1))
+
+        edge_index = knn_graph(V2, k = 7)
+        VCN = torch.cat((V2,CN[index_remove_base,:]),dim=-1)
+        data = Data(x= VCN , edge_index=edge_index )
+        data.segmentation_labels = segmentation_labels
+        
+
+        return data
+
+
+    
+
+    
+    def getName(self,index):
+        return self.df.iloc[index]['surf']  
+    
+    def getLandmark(self,index):
+        surf = ReadSurf(os.path.join(self.mouth_path,self.df.iloc[index]['surf']))
+
+        V = tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(float32)
+        # F = tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:]).to(int64)
+        
+        matrix = np.eye(4)
+        if self.surf_transform :
+            surf , matrix_transform = self.surf_transform(surf)
+            matrix = np.matmul(matrix,matrix_transform)
+
+        landmark_pos = get_landmarks_position(os.path.join(self.mouth_path,self.df.iloc[index]['landmark']),self.landmark,matrix=matrix)
+
+        return landmark_pos
 
 class DatasetGCNSegTeeth(DatasetGCN):
     def __init__(self, path, landmark, transfrom,radius) -> None:
@@ -158,7 +242,7 @@ class DatasetGCNSegTeeth(DatasetGCN):
           'LR4CL': 28, 'LR4CB': 28, 'LR4O': 28, 'LR4DB': 28, 'LR4MB': 28, 'LR4R': 28, 'LR4RIP': 28, 'LR4OIP': 28, 'LR5CL': 29, 
           'LR5CB': 29, 'LR5O': 29, 'LR5DB': 29, 'LR5MB': 29, 'LR5R': 29, 'LR5RIP': 29, 'LR5OIP': 29, 'LR6CL': 30, 'LR6CB': 30, 
           'LR6O': 30, 'LR6DB': 30, 'LR6MB': 30, 'LR6R': 30, 'LR6RIP': 30, 'LR6OIP': 30, 'LR7CL': 31, 'LR7CB': 31, 'LR7O': 31, 
-          'LR7DB': 31, 'LR7MB': 31, 'LR7R': 31, 'LR7RIP': 31, 'LR7OIP': 31}
+          'LR7DB': 31, 'LR7MB': 31, 'LR7R': 31, 'LR7RIP': 31, 'LR7OIP': 31,'Palete':33}
 
 
     def __getitem__(self, index):

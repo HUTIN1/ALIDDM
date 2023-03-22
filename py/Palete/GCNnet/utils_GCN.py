@@ -184,7 +184,6 @@ def RemoveBase(surf=None,vertex=None):
     pos_max = V[arg]
     pos_max2 = pos_max[2]
     list_index = []
-    print(f'pos max {pos_max}')
     for index , v in enumerate(V) :
         if v[2] > pos_max2 or  torch.dist(v,mean) < 0.4:
             new_tensor.append(v.unsqueeze(0))
@@ -197,7 +196,6 @@ def RemoveBase(surf=None,vertex=None):
     new_tensor2 = []
     list_index2 = []
     arg = torch.argsort(new_tensor[...,2],dim=0)[0]
-    print(f'args {arg}, new tensor {new_tensor.shape}' )
     minargs = new_tensor[arg,2] + torch.tensor(0.1)
     for index , v in zip(list_index,new_tensor):
         if v[2] > minargs:
@@ -206,7 +204,6 @@ def RemoveBase(surf=None,vertex=None):
 
     new_tensor2 = torch.cat(new_tensor2,dim=0)
     list_index2 = torch.tensor(list_index2)
-    print(f'list index {list_index2}')
     return new_tensor2, list_index2
 
 

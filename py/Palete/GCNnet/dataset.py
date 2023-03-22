@@ -213,6 +213,64 @@ class DatasetGCNSeg():
         landmark_pos = get_landmarks_position(os.path.join(self.mouth_path,self.df.iloc[index]['landmark']),self.landmark,matrix=matrix)
 
         return landmark_pos
+    
+
+
+
+class DatasetGCNSegPred():
+    def __init__(self, path, surf_transfrom) -> None:
+        self.df = self.search(path,'.vtk')['.vtk']
+        self.surf_transform = surf_transfrom
+
+    def __len__(self):
+        return len(self.df)
+    def __getitem__(self, index):
+
+        surf = ReadSurf(self.df[index])
+       
+        matrix = np.eye(4)
+        surf, matrix_or = PrePreAso(surf,[[-0.5,-0.5,0],[0,0.5,0],[0.5,-0.5,0]],['4','9','10','15'])
+        matrix = np.matmul(matrix_or,matrix)
+        if self.surf_transform :
+            surf , matrix_transfrom = self.surf_transform(surf)
+            matrix = np.matmul(matrix_transfrom,matrix)
+
+        surf = ComputeNormals(surf)
+
+        V = tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(float32)
+        F = tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:]).to(int64)
+        CN = tensor(vtk_to_numpy(GetColorArray(surf, "Normals"))/255.0,dtype=torch.float32) 
+
+        V2, index_remove_base = RemoveBase(vertex=V)
+        edge_index = knn_graph(V2, k = 7)
+        VCN = torch.cat((V2,CN[index_remove_base,:]),dim=-1)
+        data = Data(x= VCN , edge_index=edge_index )
+        return data ,V , index_remove_base, torch.tensor(matrix)
+    
+    def getName(self,index):
+        return self.df[index] 
+    
+    def search(self,path,*args):
+            """
+            Return a dictionary with args element as key and a list of file in path directory finishing by args extension for each key
+
+            Example:
+            args = ('json',['.nii.gz','.nrrd'])
+            return:
+                {
+                    'json' : ['path/a.json', 'path/b.json','path/c.json'],
+                    '.nii.gz' : ['path/a.nii.gz', 'path/b.nii.gz']
+                    '.nrrd.gz' : ['path/c.nrrd']
+                }
+            """
+            arguments=[]
+            for arg in args:
+                if type(arg) == list:
+                    arguments.extend(arg)
+                else:
+                    arguments.append(arg)
+            return {key: [i for i in glob.iglob(os.path.normpath("/".join([path,'**','*'])),recursive=True) if i.endswith(key)] for key in arguments}
+    
 
 class DatasetGCNSegTeeth(DatasetGCN):
     def __init__(self, path, landmark, transfrom,radius) -> None:

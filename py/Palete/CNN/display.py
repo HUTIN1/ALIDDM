@@ -11,7 +11,7 @@ from torch.nn.utils.rnn import pad_sequence
 from pytorch3d.structures import Meshes, Pointclouds
 from pytorch3d.utils import ico_sphere
 from pytorch3d.renderer import (
-TexturesVertex, FoVPerspectiveCameras, look_at_rotation
+TexturesVertex, FoVPerspectiveCameras, look_at_rotation,look_at_view_transform
 )
 
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -29,6 +29,7 @@ import matplotlib.pyplot as plt
 from utils import WriteSurf
 from torch import tensor
 from PIL import Image
+
 
 import utils
 
@@ -72,7 +73,7 @@ def main(args):
     # train_transfrom = MyCompose([PickLandmarkTransform(args.landmark,args.property)])
     radius = 1.6
     model = MonaiUNetHRes(args, out_channels = 2, class_weights=class_weights, image_size=320, train_sphere_samples=args.train_sphere_samples,radius=radius)
-    quit()
+
     train_ds  = TeethDatasetLm(mount_point = args.mount_point, df = df_train,surf_property = args.property,transform =train_transfrom,landmark=args.landmark ,test=True)
     dataloader = DataLoader(train_ds, batch_size=1, num_workers=args.num_workers, persistent_workers=True, pin_memory=True)
     
@@ -105,12 +106,14 @@ def main(args):
     ico_verts = ico_verts.to(torch.float32)
     ico_list = []
     for ico in ico_verts :
-        if ico[1] < 0 :
+        if ico[1] < 0  and ico[2] > 0:
             ico_list.append(ico.unsqueeze(0))
     ico_verts = torch.cat(ico_list,dim=0)
     for idx, v in enumerate(ico_verts):
         # if (torch.abs(torch.sum(v)) == radius):
             ico_verts[idx] = v + torch.normal(0.0, 1e-7, (3,))
+
+    ico_verts = torch.tensor([[0,0,1]],device=device).to(torch.float32)
     # # sphere =  Pointclouds(points=[sphere_verts])
 
     # matrix_rotation = torch.tensor(utils.RotationMatrix(np.array([1,0,0]),np.array(3.1415/8))).to(torch.float32)
@@ -123,7 +126,7 @@ def main(args):
     F = F.to(device)
     CL = CL.to(device)
     CN = CN.to(device)
-    # X, PF = model.render(V, F, CN)
+    X, PF = model.render(V, F, CN)
     R=[]
     T = []
 
@@ -132,9 +135,11 @@ def main(args):
         camera_position = camera_position.unsqueeze(0).to(device)
 
         r = look_at_rotation(camera_position).to(device)  # (1, 3, 3)
-        # t = torch.bmm(r.transpose(1, 2), camera_position[:,:,None])[:, :, 0].to(device)   # (1, 3)
+        t = torch.bmm(r.transpose(1, 2), camera_position[:,:,None])[:, :, 0].to(device)   # (1, 3)
         # r = -r 
-        t = torch.tensor([[0,0,0.5]])
+        # t = torch.tensor([[0,0,0.5]])
+        # _ , t = look_at_view_transform(1,1,0)
+        # t = t.to(device)
         # t = camera_position
         # r = - torch.eye(3).unsqueeze(0)
         R.append(r)
@@ -147,7 +152,8 @@ def main(args):
     "subplot1": {
         "mouth" : mesh,
         # 'sphere':ListToMesh(ico_verts.tolist()),
-        'cam' : cam
+        'cam' : cam,
+        'point cam': ListToMesh(t.tolist())
     }
     })
     fig.show()
@@ -155,10 +161,10 @@ def main(args):
 
 
     # image_grid(y[...,:3].cpu().numpy(),rows=4,cols=3)
-    # X = X.permute(1,0,3,4,2)
-    # print(X.size())
-    # image_grid(X[...,:3].cpu().numpy(),rows=4,cols=4)
-    # plt.show()
+    X = X.permute(1,0,3,4,2)
+    print(X.size())
+    image_grid(X[...,:3].cpu().numpy(),rows=2,cols=2)
+    plt.show()
     # print('unique',torch.unique(X))
     # for i in range(X.size()[0]):
     #     imname = f'/home/luciacev/Desktop/Project/ALIDDM/figure/test{i}.jpeg'
@@ -180,7 +186,7 @@ def main(args):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Teeth challenge Training')
-    parser.add_argument('--csv_train', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data/csv/train_UL1O.csv')    
+    parser.add_argument('--csv_train', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/IOSReg/renamed_segmented/train_palete.csv')    
     parser.add_argument('--csv_valid', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data/csv/val_UL1O.csv')
     parser.add_argument('--csv_test', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data/csv/test_UL1O.csv')      
     parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='Learning rate')
@@ -188,14 +194,14 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', help='Max number of epochs', type=int, default=200)    
     parser.add_argument('--model', help='Model to continue training', type=str, default= None)
     parser.add_argument('--out', help='Output', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Test/random_rotation")
-    parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data/data_base")
+    parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/IOSReg/renamed_segmented/")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
     parser.add_argument('--batch_size', help='Batch size', type=int, default=1)    
     parser.add_argument('--train_sphere_samples', help='Number of training sphere samples or views used during training and validation', type=int, default=4)    
     parser.add_argument('--patience', help='Patience for early stopping', type=int, default=4)
     parser.add_argument('--profiler', help='Use a profiler', type=str, default=None)
     parser.add_argument('--property', help='label of segmentation', type=str, default="PredictedID")
-    parser.add_argument('--landmark',help='name of landmark to found',default='UL2O')
+    parser.add_argument('--landmark',help='name of landmark to found',default=['L2RM'])
     
     
     parser.add_argument('--tb_dir', help='Tensorboard output dir', type=str, default='/home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth/tensorboard')

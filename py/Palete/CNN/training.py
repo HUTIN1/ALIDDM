@@ -28,7 +28,7 @@ def main(args):
 
     checkpoint_callback = ModelCheckpoint(
         dirpath=args.out,
-        filename=f'{args.landmark}'+'{epoch}-{val_loss:.2f}',
+        filename=f'{args.landmark}'+'{epoch}-{val_loss:.2f}_unet_cosine',
         save_top_k=2,
         monitor='val_loss'
     )
@@ -93,10 +93,10 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
     parser.add_argument('--batch_size', help='Batch size', type=int, default=5)    
     parser.add_argument('--train_sphere_samples', help='Number of training sphere samples or views used during training and validation', type=int, default=4)    
-    parser.add_argument('--patience', help='Patience for early stopping', type=int, default=30)
+    parser.add_argument('--patience', help='Patience for early stopping', type=int, default=50)
     parser.add_argument('--profiler', help='Use a profiler', type=str, default=None)
     parser.add_argument('--property', help='label of segmentation', type=str, default="PredictedID")
-    parser.add_argument('--landmark',help='name of landmark to found',default='L2RM')
+    parser.add_argument('--landmark',help='name of landmark to found',default=['L2RM'])
     parser.add_argument('--load_checkpoint')
     
     

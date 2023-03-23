@@ -116,7 +116,7 @@ class TeethDataModuleLm(pl.LightningDataModule):
 
 
 class TeethDatasetLm(Dataset):
-    def __init__(self,df,surf_property ,mount_point='',transform = False,landmark='',test=False,prediction=False):
+    def __init__(self,df,surf_property ,mount_point='',transform = False,landmark=[],test=False,prediction=False):
         self.df = df
         self.mount_point = mount_point
 
@@ -145,16 +145,16 @@ class TeethDatasetLm(Dataset):
         if self.transform:
             surf, matrix_transform = self.transform(surf)
 
-        matrix = np.matmul(matrix_transform,matrix)
+            matrix = np.matmul(matrix_transform,matrix)
 
-        scale = 3
-        scale_matrix = np.array([[scale,0,0,0],
-                                             [0, scale,0 ,0],
-                                             [0, 0, scale ,0],
-                                             [0, 0, 0, 1]])
-        surf = TransformSurf(surf, scale_matrix)
+        # scale = 3
+        # scale_matrix = np.array([[scale,0,0,0],
+        #                                      [0, scale,0 ,0],
+        #                                      [0, 0, scale ,0],
+        #                                      [0, 0, 0, 1]])
+        # surf = TransformSurf(surf, scale_matrix)
 
-        matrix = np.matmul(scale_matrix,matrix)
+        # matrix = np.matmul(scale_matrix,matrix)
 
         
         
@@ -173,6 +173,8 @@ class TeethDatasetLm(Dataset):
 
 
             pos_landmark = get_landmarks_position(os.path.join(self.mount_point,self.df.iloc[index]["landmark"]),self.landmark,matrix)
+
+            print(f'pos landmark {pos_landmark}')
 
 
             LF = pos_landmard2seg(V,pos_landmark)
@@ -249,14 +251,14 @@ class TeethDatasetLmCoss(Dataset):
 
         matrix = np.matmul(matrix_transform,matrix)
 
-        scale = 3
-        scale_matrix = np.array([[scale,0,0,0],
-                                             [0, scale,0 ,0],
-                                             [0, 0, scale ,0],
-                                             [0, 0, 0, 1]])
-        surf = TransformSurf(surf, scale_matrix)
+        # scale = 3
+        # scale_matrix = np.array([[scale,0,0,0],
+        #                                      [0, scale,0 ,0],
+        #                                      [0, 0, scale ,0],
+        #                                      [0, 0, 0, 1]])
+        # surf = TransformSurf(surf, scale_matrix)
 
-        matrix = np.matmul(scale_matrix,matrix)
+        # matrix = np.matmul(scale_matrix,matrix)
 
         
         
@@ -289,7 +291,7 @@ class TeethDatasetLmCoss(Dataset):
                 # CL = pos_landmard2seg(V,pos_landmark)
                 return V, F, CN, CL
             
-            return V, F, CN, torch.tensor(vector).unsqueeze(0), torch.tensor(distance).unsqueeze(0).unsqueeze(0)
+            return V, F, CN, torch.tensor(vector), torch.tensor(distance).unsqueeze(0).unsqueeze(0)
             
             
         else :

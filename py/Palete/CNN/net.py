@@ -82,6 +82,7 @@ class Combination(nn.Module):
         self.net2 = args[1]
 
     def forward(self,input):
+        
         x1 = self.net1(input)
         x2 = self.net2(x1)
 
@@ -126,11 +127,11 @@ class MonaiUNetHRes(pl.LightningModule):
 
 
     def setup_ico_verts(self):
-        ico_verts, ico_faces = utils.PolyDataToTensors(utils.CreateIcosahedron(radius=1, sl=1))
+        ico_verts, ico_faces = utils.PolyDataToTensors(utils.CreateIcosahedron(radius=0.1, sl=2))
 
         ico_list = []
         for ico in ico_verts :
-            if ico[1] < 0.1 and ico[2]< 0.5:
+            if ico[1] < 0 and ico[2]> 0:
                 ico_list.append(ico.unsqueeze(0))
 
         ico_verts = torch.cat(ico_list,dim=0)
@@ -203,14 +204,16 @@ class MonaiUNetHRes(pl.LightningModule):
 
         PF = []
         X = []
-
+        self.ico_verts = torch.tensor([[0,0,0.9],[0.2,0,0.9],[-0.2,0,0.9]],device=self.device).to(torch.float32)
         for camera_position in self.ico_verts:
 
             camera_position = camera_position.unsqueeze(0).to(self.device)
 
             R =  look_at_rotation(camera_position, device=self.device)  # (1, 3, 3)
-            # T = - torch.bmm(R.transpose(1, 2), camera_position[:,:,None])[:, :, 0]   # (1, 3)
-            T = torch.tensor([[0,0,0.4]],device=self.device)
+            T = - torch.bmm(R.transpose(1, 2), camera_position[:,:,None])[:, :, 0]   # (1, 3)
+            # T = torch.tensor([[0,0,0]],device=self.device)
+            # _ , T = look_at_view_transform(1,1,0)
+            # T = T.to(self.device)
             # T = camera_position
             # R =  - torch.eye(3).unsqueeze(0).to(self.device)
 
@@ -346,25 +349,26 @@ class MonaiUnetCosine(pl.LightningModule):
 
 
     def setup_ico_verts(self):
-        ico_verts, ico_faces = utils.PolyDataToTensors(utils.CreateIcosahedron(radius=1, sl=1))
+        # ico_verts, ico_faces = utils.PolyDataToTensors(utils.CreateIcosahedron(radius=1, sl=1))
 
-        ico_list = []
-        for ico in ico_verts :
-            if ico[1] < 0.1 and ico[2]< 0.5:
-                ico_list.append(ico.unsqueeze(0))
+        # ico_list = []
+        # for ico in ico_verts :
+        #     if ico[1] < 0.1 and ico[2]< 0.5:
+        #         ico_list.append(ico.unsqueeze(0))
 
-        ico_verts = torch.cat(ico_list,dim=0)
+        # ico_verts = torch.cat(ico_list,dim=0)
 
-        # ico_verts[...,:2] = ico_verts[...,:2] + 0.5
-        ico_verts = ico_verts.to(torch.float32)
-        for idx, v in enumerate(ico_verts):
-            # if (torch.abs(torch.sum(v)) == radius):
-                ico_verts[idx] = v + torch.normal(0.0, 1e-7, (3,))
+        # # ico_verts[...,:2] = ico_verts[...,:2] + 0.5
+        # ico_verts = ico_verts.to(torch.float32)
+        # for idx, v in enumerate(ico_verts):
+        #     # if (torch.abs(torch.sum(v)) == radius):
+        #         ico_verts[idx] = v + torch.normal(0.0, 1e-7, (3,))
 
 
         
-        # self.register_buffer("ico_verts", ico_verts)
-        self.ico_verts = ico_verts
+        # # self.register_buffer("ico_verts", ico_verts)
+        # self.ico_verts = ico_verts
+        self.ico_verts = torch.tensor([[0,0,0.9],[0.2,0,0.9],[-0.2,0,0.9],[0.1,0,0.9],[-0.1,0,0.9]],device=self.device).to(torch.float32)
         self.number_image = self.ico_verts.shape[0]
 
 
@@ -412,8 +416,8 @@ class MonaiUnetCosine(pl.LightningModule):
             camera_position = camera_position.unsqueeze(0).to(self.device)
 
             R =  look_at_rotation(camera_position, device=self.device)  # (1, 3, 3)
-            # T = - torch.bmm(R.transpose(1, 2), camera_position[:,:,None])[:, :, 0]   # (1, 3)
-            T = torch.tensor([[0,0,0.4]],device=self.device)
+            T = - torch.bmm(R.transpose(1, 2), camera_position[:,:,None])[:, :, 0]   # (1, 3)
+            # T = torch.tensor([[0,0,0.4]],device=self.device)
             # T = camera_position
             # R =  - torch.eye(3).unsqueeze(0).to(self.device)
 
@@ -452,6 +456,7 @@ class MonaiUnetCosine(pl.LightningModule):
         
         X, PF = self.render(V, F, CN)
         # print(f'X {X.shape}')
+        # print(f'input forward {X.shape}')
         x = self.net(X)
         # x1 = self.net1(X) # (batch, number view , channel ,size image, size image)
         # print(f'x1 {x1.shape}')
@@ -511,7 +516,7 @@ class MonaiUnetCosine(pl.LightningModule):
         vector = vector.unsqueeze(1).expand(-1,self.number_image,-1).reshape(self.number_image * batch_size,-1)
         distance = distance.unsqueeze(1).expand(-1,self.number_image,-1).reshape(self.number_image * batch_size,-1)
         loss = (1 - self.CosineLoss(direction_pred,vector)).sum()
-        loss = loss+ self.MSELoss(distance_pred.to(torch.float32), distance.to(torch.float32))
+        loss = loss + self.MSELoss(distance_pred.to(torch.float32), distance.to(torch.float32))
         self.log('val_loss',loss,batch_size=batch_size)
 
         return loss

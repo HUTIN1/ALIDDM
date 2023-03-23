@@ -164,6 +164,18 @@ def ScaleSurf(surf, mean_arr = None, scale_factor = None):
 
     return surf, mean_arr, scale_factor
 
+
+
+def ScaleSurf2(surf):
+
+    surf_copy = vtk.vtkPolyData()
+    surf_copy.DeepCopy(surf)
+    surf = surf_copy
+
+    shapedatapoints = surf.GetPoints()
+
+
+
 def GetActor(surf):
     surfMapper = vtk.vtkPolyDataMapper()
     surfMapper.SetInputData(surf)
@@ -639,55 +651,58 @@ def PolyDataToTensors(surf):
     return verts, faces
 
 
-def get_landmarks_position(path,landmark, matrix):
+
+
+def get_landmarks_position(path,landmarks, matrix):
 
         data = json.load(open(os.path.join(path)))
         markups = data['markups']
         landmarks_lst = markups[0]['controlPoints']
 
-        landmarks_pos = None
-        # resc_landmarks_position = np.zeros([number_of_landmarks, 3])
-        for lm in landmarks_lst:
-            label = lm["label"]
-            if label == landmark:
-                landmarks_pos = np.matmul(matrix,np.append(lm["position"],1).T).T
-                continue
-
-        return landmarks_pos[:3]
+        landmarks_pos = []
+        tmp_dic_landmark = {}
+        for lm in landmarks_lst :
+            tmp_dic_landmark[lm['label']] = lm['position']
 
 
+        for landmark in landmarks :
+                landmark_pos = np.matmul(matrix,np.append(tmp_dic_landmark[landmark],1).T).T
+                landmarks_pos.append(landmark_pos[:3])   
 
-def pos_landmard2texture(vertex,landmark_pos):
+        return landmarks_pos     
+
+
+
+def pos_landmard2texture(vertex,landmarks_pos):
     texture = torch.zeros_like(vertex.unsqueeze(0))
     vertex = vertex.to(torch.float64)
     radius = 0.04
 
+    for idx , landmark_pos in enumerate(landmarks_pos) :
+        landmark_pos = tensor(np.array(landmark_pos)).unsqueeze(0)
+        distance = torch.cdist(landmark_pos,vertex,p=2)
+        minvalue = torch.min(distance)
+        distance = distance - minvalue
+        _, index_pos_land = torch.nonzero((distance<radius),as_tuple=True)
 
-    landmark_pos = tensor(np.array(landmark_pos)).unsqueeze(0)
-    distance = torch.cdist(landmark_pos,vertex,p=2)
-    minvalue = torch.min(distance)
-    distance = distance - minvalue
-    #print(min(distance,1))
-    _, index_pos_land = torch.nonzero((distance<radius),as_tuple=True)
 
-    texture[0,index_pos_land,1]=255
-
+        texture[0,index_pos_land,1]=idx/len(landmarks_pos) * 255
     return texture
 
-def pos_landmard2seg(vertex,landmark_pos):
+
+def pos_landmard2seg(vertex,landmarks_pos):
     texture = torch.zeros(size=(vertex.shape[0],))
     vertex = vertex.to(torch.float64)
     radius = 0.04
 
+    for idx , landmark_pos in enumerate(landmarks_pos) :
+        landmark_pos = tensor(np.array(landmark_pos)).unsqueeze(0)
+        distance = torch.cdist(landmark_pos,vertex,p=2)
+        minvalue = torch.min(distance)
+        distance = distance - minvalue
+        _, index_pos_land = torch.nonzero((distance<radius),as_tuple=True)
 
-    landmark_pos = tensor(np.array(landmark_pos)).unsqueeze(0)
-    distance = torch.cdist(landmark_pos,vertex,p=2)
-    minvalue = torch.min(distance)
-    distance = distance - minvalue
-    _, index_pos_land = torch.nonzero((distance<radius),as_tuple=True)
-    for i in index_pos_land:
-
-        texture[i]=1
+        texture[index_pos_land]=idx+1
     return texture
 
 

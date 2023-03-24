@@ -226,6 +226,13 @@ def RandomRotation(surf):
     rotationVector = rotationVector/np.linalg.norm(rotationVector)
     return RotateSurf(surf, rotationAngle, rotationVector), rotationAngle, rotationVector
 
+def RandomRotationZ(surf):
+    rotationAngle = np.random.random()*360.0
+    rotationVector = np.random.random(2)*1.4 - 0.7
+    # rotationVector = rotationVector/np.linalg.norm(rotationVector)
+    rotationVector = np.append(rotationVector,1)
+    return RotateSurf(surf, rotationAngle, rotationVector), rotationAngle, rotationVector
+
 def GetUnitSurf(surf, mean_arr = None, scale_factor = None):
   surf, surf_mean, surf_scale = ScaleSurf(surf, mean_arr, scale_factor)
   return surf, surf_mean, surf_scale
@@ -676,7 +683,7 @@ def get_landmarks_position(path,landmarks, matrix):
 def pos_landmard2texture(vertex,landmarks_pos):
     texture = torch.zeros_like(vertex.unsqueeze(0))
     vertex = vertex.to(torch.float64)
-    radius = 0.04
+    radius = 0.005
 
     for idx , landmark_pos in enumerate(landmarks_pos) :
         landmark_pos = tensor(np.array(landmark_pos)).unsqueeze(0)
@@ -686,14 +693,14 @@ def pos_landmard2texture(vertex,landmarks_pos):
         _, index_pos_land = torch.nonzero((distance<radius),as_tuple=True)
 
 
-        texture[0,index_pos_land,1]=idx/len(landmarks_pos) * 255
+        texture[0,index_pos_land,1]=(idx+1)/len(landmarks_pos) * 255
     return texture
 
 
 def pos_landmard2seg(vertex,landmarks_pos):
     texture = torch.zeros(size=(vertex.shape[0],))
     vertex = vertex.to(torch.float64)
-    radius = 0.04
+    radius = 0.005
 
     for idx , landmark_pos in enumerate(landmarks_pos) :
         landmark_pos = tensor(np.array(landmark_pos)).unsqueeze(0)
@@ -833,6 +840,35 @@ def RotationMatrix(axis, theta):
     return np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
                     [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
                     [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
+
+def TransformRotationMatrix(axis, theta):
+    """
+    Return the rotation matrix associated with counterclockwise rotation about
+    the given axis by theta radians.
+
+    Parameters
+    ----------
+    axis : np.array
+        Axis of rotation
+    theta : float
+        Angle of rotation in radians
+    
+    Returns
+    -------
+    np.array
+        Rotation matrix
+    """
+
+    axis = np.asarray(axis)
+    axis = axis / np.linalg.norm(axis)
+    a = np.cos(theta / 2.0)
+    b, c, d = -axis * np.sin(theta / 2.0)
+    aa, bb, cc, dd = a * a, b * b, c * c, d * d
+    bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
+    return np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac),0],
+                    [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab),0],
+                    [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc,0],
+                    [0,0,0,1]])
 
 def CreateIcosahedron(radius, sl):
     icosahedronsource = vtk.vtkPlatonicSolidSource()

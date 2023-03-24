@@ -9,7 +9,7 @@ import torch
 
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from net import MonaiUNetHRes
+from net import MonaiUNetHRes, MonaiUnetCosine
 from dataset import TeethDatasetLm
 from ManageClass import IterTeeth, PickLandmarkTransform, UnitSurfTransform
 from utils import WriteLandmark
@@ -18,8 +18,8 @@ import utils
 # from ALIDDM_utils import image_grid
 from vtk.util.numpy_support import  numpy_to_vtk
 import matplotlib.pyplot as plt
-
-
+from pytorch3d.vis.plotly_vis import AxisArgs, plot_batch_individually, plot_scene
+from pytorch3d.structures import Meshes, Pointclouds
 
 def main(args):
     
@@ -30,7 +30,7 @@ def main(args):
     class_weights = None
     out_channels = 2
 
-    model = MonaiUNetHRes(args, out_channels = 2, class_weights=class_weights, image_size=320, train_sphere_samples=4, subdivision_level=2,radius=1.6)
+    model = MonaiUnetCosine(args, out_channels = 2, class_weights=class_weights, image_size=320, train_sphere_samples=4, subdivision_level=2,radius=1.6)
 
     model.load_state_dict(torch.load(args.model)['state_dict'])
 
@@ -52,7 +52,7 @@ def main(args):
 
         for idx, batch in tqdm(enumerate(dataloader), total=len(dataloader)):
 
-            V, F, CN, matrix= batch
+            V, F, CN, matrix = batch
 
             V = V.cuda(non_blocking=True)
             F = F.cuda(non_blocking=True)
@@ -98,6 +98,13 @@ def main(args):
             WriteLandmark(dic,os.path.join(args.out,f'{name}_{args.landmark}.json'))
 
 
+            fig = plot_scene({
+            "subplot1": {
+                "mouth" : Pointclouds(V),
+                'path' : Pointclouds(V[:,V_landmark_ids,:])
+            }
+            })
+            fig.show()
 
 
 if __name__ == '__main__':
@@ -105,7 +112,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Teeth challenge prediction')
     parser.add_argument('--input',help='path folder',type=str,default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/scan_train_seg/scan/')      
-    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Model/model_test/L2RMepoch=408-val_loss=1.04CNN.ckpt")
+    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/CNN/model/['L2RM']epoch=4-val_loss=1.11_unet_cosine.ckpt")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
     parser.add_argument('--out', help='Output', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/scan_train_seg/json/')
     parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/jaw_upper")

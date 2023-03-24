@@ -127,7 +127,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Teeth challenge prediction')
     parser.add_argument('--input',help='path folder',type=str,default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/Aron/scan/')      
-    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Model/model_test/L2RMepoch=5-val_loss=1.17_cosine.ckpt")
+    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Downloads/['L2RM']epoch=11-val_loss=2.34_cosine.ckpt")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
     parser.add_argument('--out', help='Output', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/Aron/json/')
     parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/jaw_upper")

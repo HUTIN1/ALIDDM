@@ -28,7 +28,7 @@ def main(args):
 
     checkpoint_callback = ModelCheckpoint(
         dirpath=args.out,
-        filename=f'{args.landmark}'+'{epoch}-{val_loss:.2f}_unet_cosine',
+        filename=f'{args.landmark}'+'{epoch}-{val_loss:.2f}_unet_resnet_cosine',
         save_top_k=2,
         monitor='val_loss'
     )

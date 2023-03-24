@@ -3,6 +3,7 @@ import numpy as np
 
 import torch
 from torch import Tensor, nn
+from torchvision.models import resnet18
 
 
 import torchmetrics
@@ -75,6 +76,19 @@ class TimeDistributed2(nn.Module):
         return output
 
 
+
+class Resnet(nn.Module):
+    def __init__(self,num_classes = 1 ):
+        self.net = resnet18(weights = None)
+        for params in self.net.parameters():
+            params.requires_grad = True
+        self.net.fc = nn.Linear(512,num_classes)
+
+
+    def forward(self,input):
+        return self.net(input)
+
+
 class Combination(nn.Module):
     def __init__(self,*args) -> None:
         super(Combination, self).__init__()
@@ -84,6 +98,8 @@ class Combination(nn.Module):
     def forward(self,input):
         
         x1 = self.net1(input)
+        # zero = torch.zeros((x1.shape[0],x1.shape[1],1,x1.shape[3],x1.shape[4])).to(x1.device)
+        # x1 = torch.cat((x1,zero),dim=2)
         x2 = self.net2(x1)
 
         return x2
@@ -337,8 +353,14 @@ class MonaiUnetCosine(pl.LightningModule):
             num_res_units=2,
         )
         net1 = TimeDistributed(unet)
-        densnet = monai.networks.nets.densenet.DenseNet121(spatial_dims = 2, in_channels= 2 ,out_channels = 4)
+        densnet = monai.networks.nets.densenet.DenseNet121(spatial_dims = 2, in_channels= 2,out_channels = 4)
         net2 = TimeDistributed2(densnet)
+        # self.net = net2
+        # resnet_net = resnet18(weights = None)
+        # for params in resnet_net.parameters():
+        #     params.requires_grad = True
+        # resnet_net.fc = nn.Linear(512,4)
+        # # net3 = Resnet(num_classes=4)
         self.net = Combination(net1,net2)
 
         self.CosineLoss = nn.CosineSimilarity()
@@ -368,7 +390,7 @@ class MonaiUnetCosine(pl.LightningModule):
         
         # # self.register_buffer("ico_verts", ico_verts)
         # self.ico_verts = ico_verts
-        self.ico_verts = torch.tensor([[0,0,0.9],[0.2,0,0.9],[-0.2,0,0.9],[0.1,0,0.9],[-0.1,0,0.9]],device=self.device).to(torch.float32)
+        self.ico_verts = torch.tensor([[0,0,0.9],[0.2,0,0.9],[-0.2,0,0.9],[0,0.2,0.9],[0,-0.2,0.9]],device=self.device).to(torch.float32)
         self.number_image = self.ico_verts.shape[0]
 
 
@@ -458,6 +480,7 @@ class MonaiUnetCosine(pl.LightningModule):
         # print(f'X {X.shape}')
         # print(f'input forward {X.shape}')
         x = self.net(X)
+        # print(f'output dem')
         # x1 = self.net1(X) # (batch, number view , channel ,size image, size image)
         # print(f'x1 {x1.shape}')
         # x2 = self.net2(x1)
@@ -469,6 +492,8 @@ class MonaiUnetCosine(pl.LightningModule):
         distance_pred = distance_pred.contiguous().view(batch_size * self.number_image,-1)
         
         return direction_pred, distance_pred
+
+        # return x, X, PF
     
 
 
@@ -492,6 +517,7 @@ class MonaiUnetCosine(pl.LightningModule):
         # print(f'ground thruth direction {vector.shape}, distance {distance.shape}')
 
         # print(f'norm direction pred {torch.linalg.norm(direction_pred,dim = 1)}, vector {torch.linalg.norm(vector,dim=1)}')
+        # print(f'direction pred :{direction_pred.shape}, vector { vector.shape}')
         loss = (1 - self.CosineLoss(direction_pred,vector)).sum()
         loss = loss + self.MSELoss(distance_pred.to(torch.float32), distance.to(torch.float32))
         self.log('train_loss',loss,batch_size=batch_size)

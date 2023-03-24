@@ -30,7 +30,7 @@ from utils import(
     ReadSurf,
     ComputeNormals,
     GetColorArray,
-    RandomRotation,get_landmarks_position, pos_landmard2texture, pos_landmard2seg, TransformSurf
+    RandomRotation,get_landmarks_position, pos_landmard2texture, pos_landmard2seg, TransformSurf,TransformRotationMatrix,RandomRotationZ
 )
 
 
@@ -62,7 +62,7 @@ class TeethDataModuleLm(pl.LightningDataModule):
         # self.train_ds = TeethDatasetLm(mount_point = self.mount_point, df = self.df_train,surf_property = self.surf_property,transform=self.train_transform,landmark=self.landmark)
         # self.val_ds = TeethDatasetLm(mount_point = self.mount_point, df = self.df_val,surf_property = self.surf_property, transform=self.val_transform,landmark=self.landmark)
         # self.test_ds = TeethDatasetLm(mount_point = self.mount_point, df = self.df_test,surf_property = self.surf_property,transform=self.test_transform,landmark=self.landmark)
-        self.train_ds  = TeethDatasetLmCoss(mount_point = self.mount_point, df = self.df_train,surf_property = self.surf_property,transform=self.train_transform,landmark=self.landmark)
+        self.train_ds  = TeethDatasetLmCoss(mount_point = self.mount_point, df = self.df_train,surf_property = self.surf_property,transform=self.train_transform,landmark=self.landmark,random_rotation=True)
         self.val_ds = TeethDatasetLmCoss(mount_point = self.mount_point, df = self.df_val,surf_property = self.surf_property, transform=self.val_transform,landmark=self.landmark)
         self.test_ds = TeethDatasetLmCoss(mount_point = self.mount_point, df = self.df_test,surf_property = self.surf_property,transform=self.test_transform,landmark=self.landmark)
 
@@ -116,7 +116,7 @@ class TeethDataModuleLm(pl.LightningDataModule):
 
 
 class TeethDatasetLm(Dataset):
-    def __init__(self,df,surf_property ,mount_point='',transform = False,landmark=[],test=False,prediction=False):
+    def __init__(self,df,surf_property ,mount_point='',transform = False,landmark=[],test=False,prediction=False,random_rotation= False):
         self.df = df
         self.mount_point = mount_point
 
@@ -126,6 +126,7 @@ class TeethDatasetLm(Dataset):
         self.landmark = landmark
         self.test = test
         self.prediction= prediction
+        self.random_rotation = random_rotation
 
 
     def __len__(self):
@@ -134,13 +135,23 @@ class TeethDatasetLm(Dataset):
 
     def __getitem__(self, index) :
         if isinstance(self.df,list):
-            surf = ReadSurf(self.df[index])
+            # surf = ReadSurf(self.df[index])
+            # print(f'path scan {self.df[index]}')
+            surf = ReadSurf('/home/luciacev/Desktop/Data/IOSReg/files_not_organize/DeniseTest_json/P1_Upper.vtk')
 
         else :
 
             surf = ReadSurf(os.path.join(self.mount_point,self.df.iloc[index]["surf"]))
 
         surf, matrix = PrePreAso(surf,[[-0.5,-0.5,0],[0,0.5,0],[0.5,-0.5,0]],['4','9','10','15'])
+
+  
+
+        if self.random_rotation:
+            surf , angle, vector = RandomRotationZ(surf)
+            matrix_random_rotation = TransformRotationMatrix(vector, angle)
+            matrix = np.matmul(matrix_random_rotation,matrix)
+
 
         if self.transform:
             surf, matrix_transform = self.transform(surf)
@@ -173,6 +184,7 @@ class TeethDatasetLm(Dataset):
 
 
             pos_landmark = get_landmarks_position(os.path.join(self.mount_point,self.df.iloc[index]["landmark"]),self.landmark,matrix)
+
 
             print(f'pos landmark {pos_landmark}')
 
@@ -220,7 +232,7 @@ class TeethDatasetLm(Dataset):
 
 
 class TeethDatasetLmCoss(Dataset):
-    def __init__(self,df,surf_property ,mount_point='',transform = False,landmark='',test=False,prediction=False):
+    def __init__(self,df,surf_property ,mount_point='',transform = False,landmark='',test=False,prediction=False,random_rotation=False):
         self.df = df
         self.mount_point = mount_point
 
@@ -230,6 +242,7 @@ class TeethDatasetLmCoss(Dataset):
         self.landmark = landmark
         self.test = test
         self.prediction= prediction
+        self.random_rotation = random_rotation
 
 
     def __len__(self):
@@ -245,6 +258,12 @@ class TeethDatasetLmCoss(Dataset):
             surf = ReadSurf(os.path.join(self.mount_point,self.df.iloc[index]["surf"]))
 
         surf, matrix = PrePreAso(surf,[[-0.5,-0.5,0],[0,0.5,0],[0.5,-0.5,0]],['5','9','10','14'])
+
+        if self.random_rotation:
+            surf , angle, vector = RandomRotationZ(surf)
+            matrix_random_rotation = TransformRotationMatrix(vector, angle)
+            matrix = np.matmul(matrix_random_rotation,matrix)
+
 
         if self.transform:
             surf, matrix_transform = self.transform(surf)
@@ -291,7 +310,7 @@ class TeethDatasetLmCoss(Dataset):
                 # CL = pos_landmard2seg(V,pos_landmark)
                 return V, F, CN, CL
             
-            return V, F, CN, torch.tensor(vector), torch.tensor(distance).unsqueeze(0).unsqueeze(0)
+            return V, F, CN, torch.tensor(vector), torch.tensor(distance).unsqueeze(0).unsqueeze(0)#, matrix
             
             
         else :

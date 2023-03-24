@@ -18,8 +18,8 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from monai.transforms import Compose
 
 
-from dataset import TeethDatasetLm
-from net import MonaiUNetHRes
+from dataset import TeethDatasetLm, TeethDatasetLmCoss
+from net import MonaiUNetHRes, MonaiUnetCosine
 from ManageClass import RandomPickTeethTransform, PickLandmarkTransform, MyCompose, RandomRotation, UnitSurfTransform
 
 from utils import image_grid
@@ -72,9 +72,10 @@ def main(args):
     train_transfrom = MyCompose([UnitSurfTransform()])
     # train_transfrom = MyCompose([PickLandmarkTransform(args.landmark,args.property)])
     radius = 1.6
-    model = MonaiUNetHRes(args, out_channels = 2, class_weights=class_weights, image_size=320, train_sphere_samples=args.train_sphere_samples,radius=radius)
+    model = MonaiUnetCosine(args, out_channels = 2, class_weights=class_weights, image_size=320, train_sphere_samples=args.train_sphere_samples,radius=radius)
 
-    train_ds  = TeethDatasetLm(mount_point = args.mount_point, df = df_train,surf_property = args.property,transform =train_transfrom,landmark=args.landmark ,test=True)
+    path_scan = utils.search('/home/luciacev/Desktop/Data/IOSReg/files_not_organize/DeniseTest_json/','.vtk')['.vtk']
+    train_ds  = TeethDatasetLm(mount_point = args.mount_point, df = path_scan ,surf_property = args.property,transform =train_transfrom,landmark=args.landmark ,test=True,random_rotation=True,prediction=True)
     dataloader = DataLoader(train_ds, batch_size=1, num_workers=args.num_workers, persistent_workers=True, pin_memory=True)
     
 
@@ -86,17 +87,19 @@ def main(args):
 
     
 
-    iterdata= iter(dataloader)
-    data = next(iterdata)
-
+    # iterdata= iter(dataloader)
+    # data = next(iterdata)
+    data = train_ds[0]
     V, F, CN, CL = data
-    # V = V.squeeze(0)
-    # F = F.squeeze(0) 
+    V = V.unsqueeze(0)
+    F = F.unsqueeze(0) 
+    CN = CN.unsqueeze(0)
     CL = CL.squeeze(0)
 
     print('V.size()',V.size())
     print('F.size()',F.size())
     print('CL.shape',CL.shape)
+    # print(f'color map {torch.unique(CL)}')
 
     # a = torch.linspace(-0.75,0.75,4)
     # ico_verts = torch.tensor([[x.item(),y.item(),0.75] for x in a for y in a]).to(torch.float32) 
@@ -119,8 +122,8 @@ def main(args):
     # matrix_rotation = torch.tensor(utils.RotationMatrix(np.array([1,0,0]),np.array(3.1415/8))).to(torch.float32)
     # ico_verts = torch.matmul(matrix_rotation,ico_verts.t()).t()
 
-    texture = TexturesVertex(CL)
-
+    texture = TexturesVertex(CN)
+    print(f'V { V.shape}, F {F.shape}')
     mesh = Meshes(verts=V,faces=F,textures=texture)
     V = V.to(device)
     F = F.to(device)
@@ -163,7 +166,7 @@ def main(args):
     # image_grid(y[...,:3].cpu().numpy(),rows=4,cols=3)
     X = X.permute(1,0,3,4,2)
     print(X.size())
-    image_grid(X[...,:3].cpu().numpy(),rows=2,cols=2)
+    image_grid(X[...,:3].cpu().numpy(),rows=2,cols=5)
     plt.show()
     # print('unique',torch.unique(X))
     # for i in range(X.size()[0]):

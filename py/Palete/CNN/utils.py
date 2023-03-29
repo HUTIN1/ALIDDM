@@ -228,9 +228,11 @@ def RandomRotation(surf):
 
 def RandomRotationZ(surf):
     rotationAngle = np.random.random()*360.0
-    rotationVector = np.random.random(2)*1.4 - 0.7
-    # rotationVector = rotationVector/np.linalg.norm(rotationVector)
+    rotationVector = np.random.random(2)*0.3 - 0.15
+    # rotationVector = np.array([0,0])
     rotationVector = np.append(rotationVector,1)
+    rotationVector = rotationVector/np.linalg.norm(rotationVector)
+    
     return RotateSurf(surf, rotationAngle, rotationVector), rotationAngle, rotationVector
 
 def GetUnitSurf(surf, mean_arr = None, scale_factor = None):
@@ -660,13 +662,14 @@ def PolyDataToTensors(surf):
 
 
 
-def get_landmarks_position(path,landmarks, matrix):
+def get_landmarks_position(path,landmarks, matrix,dic=False):
 
         data = json.load(open(os.path.join(path)))
         markups = data['markups']
         landmarks_lst = markups[0]['controlPoints']
 
         landmarks_pos = []
+        dic_landmark_pos= {}
         tmp_dic_landmark = {}
         for lm in landmarks_lst :
             tmp_dic_landmark[lm['label']] = lm['position']
@@ -674,9 +677,15 @@ def get_landmarks_position(path,landmarks, matrix):
 
         for landmark in landmarks :
                 landmark_pos = np.matmul(matrix,np.append(tmp_dic_landmark[landmark],1).T).T
-                landmarks_pos.append(landmark_pos[:3])   
+                if dic :
+                    dic_landmark_pos[landmark] = landmark_pos[:3]
+                else :
+                    landmarks_pos.append(landmark_pos[:3])   
 
-        return landmarks_pos     
+        if dic :
+            return dic_landmark_pos
+        else :
+            return landmarks_pos     
 
 
 
@@ -713,6 +722,40 @@ def pos_landmard2seg(vertex,landmarks_pos):
     return texture
 
 
+def pos_landmard2seg_special(vertex,landmarks_pos):
+    texture = torch.zeros(size=(vertex.shape[0],))
+    vertex = vertex.to(torch.float64)
+    radius = 0.02
+    dic = {'L2RM' :3,'R2RM':3,'L3RM':3,'R3RM':3,'R3RL':1,'L3RL':1,'RPR':1,'LPR':1}
+
+    for idx , items  in enumerate(landmarks_pos.items()) :
+        label, landmark_pos = items
+        landmark_pos = tensor(np.array(landmark_pos)).unsqueeze(0)
+        distance = torch.cdist(landmark_pos,vertex,p=2)
+        minvalue = torch.min(distance)
+        distance = distance - minvalue
+        _, index_pos_land = torch.nonzero((distance<dic[label]*radius),as_tuple=True)
+
+        texture[index_pos_land]=idx+1
+    return texture
+
+
+def pos_landmard2texture_special(vertex,landmarks_pos):
+    texture = torch.zeros_like(vertex.unsqueeze(0))
+    vertex = vertex.to(torch.float64)
+    radius = 0.025
+    dic = {'L2RM' :3,'R2RM':3,'L3RM':3,'R3RM':3,'R3RL':1.5,'L3RL':1.5,'RPR':1.5,'LPR':1.5}
+
+    for idx , items in enumerate(landmarks_pos.items()) :
+        label, landmark_pos = items
+        landmark_pos = tensor(np.array(landmark_pos)).unsqueeze(0)
+        distance = torch.cdist(landmark_pos,vertex,p=2)
+        minvalue = torch.min(distance)
+        distance = distance - minvalue
+        _, index_pos_land = torch.nonzero((distance<dic[label]*radius),as_tuple=True)
+
+        texture[0,index_pos_land,1]=(idx+1)/len(landmarks_pos) 
+    return texture
 def arrayFromVTKMatrix(vmatrix):
   """Return vtkMatrix4x4 or vtkMatrix3x3 elements as numpy array.
   The returned array is just a copy and so any modification in the array will not affect the input matrix.
@@ -870,6 +913,19 @@ def TransformRotationMatrix(axis, theta):
                     [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc,0],
                     [0,0,0,1]])
 
+
+    # coss = np.cos(theta)
+    # sinn = np.sin(theta)
+    # x = axis[0]
+    # y = axis[1]
+    # z = axis[2]
+    # matrix = np.array([[coss + x*x *(1-coss), x*y*(1-coss)-z*sinn , x*z*(1-coss) + y-sinn, 0],
+    #                    [y*x*(1-coss) + z*sinn , coss+ y*y* (1-coss), y*z*(1-coss) - z*sinn, 0],
+    #                    [z*x*(1-coss) - y*sinn, z*y*(1-coss) + x*sinn, coss+z*z*(1-coss), 0],
+    #                    [0,0,0,1]])
+    # return matrix
+
+
 def CreateIcosahedron(radius, sl):
     icosahedronsource = vtk.vtkPlatonicSolidSource()
     icosahedronsource.SetSolidTypeToIcosahedron()
@@ -984,4 +1040,5 @@ def WriteLandmark(dic_landmark,path):
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(file, f, ensure_ascii=False, indent=4)
     f.close
+    print('finish')
 

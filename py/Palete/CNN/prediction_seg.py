@@ -10,9 +10,9 @@ import torch
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from net import MonaiUNetHRes, MonaiUnetCosine
-from dataset import TeethDatasetLm, TeethDatasetLmCoss
+from dataset import TeethDatasetLm, TeethDatasetLmCoss, TeethDatasetPatch
 from ManageClass import IterTeeth, PickLandmarkTransform, UnitSurfTransform
-from utils import WriteLandmark
+from utils import WriteLandmark, WriteSurf
 import utils
 # import cv2
 # from ALIDDM_utils import image_grid
@@ -47,16 +47,16 @@ def main(args):
 
 
     class_weights = None
-    out_channels = 2
+    out_channels = 9
 
-    model = MonaiUnetCosine(args, out_channels = 2, class_weights=class_weights, image_size=320, train_sphere_samples=4, subdivision_level=2,radius=1.6)
+    model = MonaiUNetHRes(args, out_channels = 9, class_weights=class_weights, image_size=320, train_sphere_samples=4, subdivision_level=2,radius=1.6)
 
     model.load_state_dict(torch.load(args.model)['state_dict'])
 
     df =utils.search(args.input,'.vtk')['.vtk']
 
 
-    ds = TeethDatasetLmCoss(df,args.array_name, mount_point = args.mount_point,landmark=args.landmark,transform=UnitSurfTransform(),prediction=True)
+    ds = TeethDatasetPatch(df,args.array_name, mount_point = args.mount_point,landmark=args.landmark,transform=UnitSurfTransform(),prediction=True)
 
     dataloader = DataLoader(ds, batch_size=1, num_workers=args.num_workers, persistent_workers=True, pin_memory=True)
     
@@ -72,52 +72,38 @@ def main(args):
         for idx, batch in tqdm(enumerate(dataloader), total=len(dataloader)):
             name = ds.getName(idx)
 
-            V, F, CN, matrix= batch
+            V, F, CN = batch
+
 
             V = V.cuda(non_blocking=True)
             F = F.cuda(non_blocking=True)
             CN = CN.cuda(non_blocking=True).to(torch.float32)
-            matrix = matrix.cuda(non_blocking = True).to(torch.float32).squeeze()
 
+            x, X, PF = model((V, F, CN))
+            x = softmax(x*(PF>=0))
 
-            vector, distance = model((V, F, CN))
-            # print(f'shape vector {vector.shape}, distance {distance.shape}')
+            P_faces = torch.zeros(out_channels, F.shape[1]).to(device)
+            V_labels_prediction = torch.zeros(V.shape[1]).to(device).to(torch.int64)
 
-            landmark_vector = torch.mul(vector,distance)
-            # print(f'landmark vector {landmark_vector}')
+            PF = PF.squeeze()
+            x = x.squeeze()
 
+            print(f'PF : {PF.shape}, x : {x.shape}, P_faces : {P_faces.shape}, V_labels_prediction { V_labels_prediction.shape}')
 
-            landmark_vector = torch.cat((landmark_vector,torch.ones((landmark_vector.shape[0],1),device=device)),dim=1).to(torch.float32)
+            for pf, pred in zip(PF, x):
+                P_faces[:, pf] += pred
 
-            # print(f'cat landmark pos {landmark_vector}')
-            # print(f'matrix {matrix}')
+            P_faces = torch.argmax(P_faces, dim=0)
 
-            landmark_vector = torch.matmul(torch.linalg.inv(matrix),landmark_vector.T).T
-            landmark_vector = landmark_vector[...,:3]
-            # print(f'after matrix landmark vector {landmark_vector}')
-  
+            faces_pid0 = F[0,:,0]
+            V_labels_prediction[faces_pid0] = P_faces
 
-            dic ={}
-            for idx , landmark in enumerate(landmark_vector):
-                dic[f'{args.landmark}_{idx}'] = landmark
+            surf = ds.getSurf(idx)
 
-            # dic={args.landmark:apply_matrix.squeeze()[:3]}
-            print(f'patient {name}, pos landmark {landmark_vector}')
-
-            WriteLandmark(dic,os.path.join(args.out,f'{name}_{args.landmark}.json'))
-
-            # print(f' vertex { V.shape}')
-
-            # mesh = Pointclouds(V)
-
-            # fig = plot_scene({'subplot 1':{
-            #     'mesh':mesh,
-            #     'landmark':ListToMesh(landmark_vector.cpu().tolist()),
-            #     # 'landmark':ListToMesh([pos.squeeze(0).cpu().tolist()])
-            # }})
-
-            # fig.show()
-            # quit()
+            V_labels_prediction = numpy_to_vtk(V_labels_prediction.cpu().numpy())
+            V_labels_prediction.SetName('Palete')
+            surf.GetPointData().AddArray(V_labels_prediction)
+            WriteSurf(surf,os.path.join(args.out,f'{name}_palete.vtk'))
 
 
 
@@ -128,8 +114,8 @@ if __name__ == '__main__':
 
 
     parser = argparse.ArgumentParser(description='Teeth challenge prediction')
-    parser.add_argument('--input',help='path folder',type=str,default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/denise/scan/')      
-    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/CNN/model/['L2RM']epoch=101-val_loss=0.12_monairesnet_cosine.ckpt")
+    parser.add_argument('--input',help='path folder',type=str,default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/Aron/scan/')      
+    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/CNN/model/['L2RM', 'R2RM', 'L3RM', 'R3RM', 'L3RL', 'R3RL', 'RPR', 'LPR']epoch=39-val_loss=1.46_segPatch.ckpt")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
     parser.add_argument('--out', help='Output', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/Aron/json/')
     parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/denise/json2/")

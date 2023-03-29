@@ -18,7 +18,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from monai.transforms import Compose
 
 
-from dataset import TeethDatasetLm, TeethDatasetLmCoss
+from dataset import TeethDatasetLm, TeethDatasetLmCoss, TeethDatasetPatch
 from net import MonaiUNetHRes, MonaiUnetCosine
 from ManageClass import RandomPickTeethTransform, PickLandmarkTransform, MyCompose, RandomRotation, UnitSurfTransform
 
@@ -74,8 +74,10 @@ def main(args):
     radius = 1.6
     model = MonaiUnetCosine(args, out_channels = 2, class_weights=class_weights, image_size=320, train_sphere_samples=args.train_sphere_samples,radius=radius)
 
-    path_scan = utils.search('/home/luciacev/Desktop/Data/IOSReg/files_not_organize/DeniseTest_json/','.vtk')['.vtk']
-    train_ds  = TeethDatasetLm(mount_point = args.mount_point, df = path_scan ,surf_property = args.property,transform =train_transfrom,landmark=args.landmark ,test=True,random_rotation=True,prediction=True)
+    # path_scan = utils.search('/home/luciacev/Desktop/Data/IOSReg/renamed_segmented/Aron_datas/','.vtk')['.vtk']
+    # train_ds  = TeethDatasetLmCoss(mount_point = args.mount_point, df = df_train ,surf_property = args.property,transform =train_transfrom,landmark=args.landmark ,test=True,random_rotation=True)
+    train_ds  = TeethDatasetPatch(mount_point = args.mount_point, df = df_train ,surf_property = args.property,transform =train_transfrom,landmark=args.landmark ,test=True,random_rotation=True)
+    
     dataloader = DataLoader(train_ds, batch_size=1, num_workers=args.num_workers, persistent_workers=True, pin_memory=True)
     
 
@@ -90,11 +92,16 @@ def main(args):
     # iterdata= iter(dataloader)
     # data = next(iterdata)
     data = train_ds[0]
-    V, F, CN, CL = data
+    print(f'name {train_ds.getName(0)}')
+    V, F, CN, CL, landmarks = data
+    # V, F, CN, CL, vector , distance = data
     V = V.unsqueeze(0)
     F = F.unsqueeze(0) 
     CN = CN.unsqueeze(0)
-    CL = CL.squeeze(0)
+    # CL = CL.squeeze(0)
+
+    # landmark = vector * distance
+    # print(f'landmark pos in display {landmark}')
 
     print('V.size()',V.size())
     print('F.size()',F.size())
@@ -122,7 +129,7 @@ def main(args):
     # matrix_rotation = torch.tensor(utils.RotationMatrix(np.array([1,0,0]),np.array(3.1415/8))).to(torch.float32)
     # ico_verts = torch.matmul(matrix_rotation,ico_verts.t()).t()
 
-    texture = TexturesVertex(CN)
+    texture = TexturesVertex(CL)
     print(f'V { V.shape}, F {F.shape}')
     mesh = Meshes(verts=V,faces=F,textures=texture)
     V = V.to(device)
@@ -130,33 +137,35 @@ def main(args):
     CL = CL.to(device)
     CN = CN.to(device)
     X, PF = model.render(V, F, CN)
-    R=[]
-    T = []
+    # R=[]
+    # T = []
 
-    for camera_position in ico_verts:
+    # for camera_position in ico_verts:
 
-        camera_position = camera_position.unsqueeze(0).to(device)
+    #     camera_position = camera_position.unsqueeze(0).to(device)
 
-        r = look_at_rotation(camera_position).to(device)  # (1, 3, 3)
-        t = torch.bmm(r.transpose(1, 2), camera_position[:,:,None])[:, :, 0].to(device)   # (1, 3)
-        # r = -r 
-        # t = torch.tensor([[0,0,0.5]])
-        # _ , t = look_at_view_transform(1,1,0)
-        # t = t.to(device)
-        # t = camera_position
-        # r = - torch.eye(3).unsqueeze(0)
-        R.append(r)
-        T.append(t)
+    #     r = look_at_rotation(camera_position).to(device)  # (1, 3, 3)
+    #     t = torch.bmm(r.transpose(1, 2), camera_position[:,:,None])[:, :, 0].to(device)   # (1, 3)
+    #     # r = -r 
+    #     # t = torch.tensor([[0,0,0.5]])
+    #     # _ , t = look_at_view_transform(1,1,0)
+    #     # t = t.to(device)
+    #     # t = camera_position
+    #     # r = - torch.eye(3).unsqueeze(0)
+    #     R.append(r)
+    #     T.append(t)
 
-    R = torch.cat(R,dim=0)
-    T = torch.cat(T,dim=0)
-    cam = FoVPerspectiveCameras(R=R, T=T)
+    # R = torch.cat(R,dim=0)
+    # T = torch.cat(T,dim=0)
+    # cam = FoVPerspectiveCameras(R=R, T=T)
     fig = plot_scene({
     "subplot1": {
         "mouth" : mesh,
         # 'sphere':ListToMesh(ico_verts.tolist()),
-        'cam' : cam,
-        'point cam': ListToMesh(t.tolist())
+        # 'cam' : cam,
+        # 'point cam': ListToMesh(t.tolist()),
+        # 'landmark' : ListToMesh(landmark.tolist(),radius=0.01)
+        'landmarks': ListToMesh(landmarks.values(),radius=0.01)
     }
     })
     fig.show()
@@ -189,7 +198,7 @@ def main(args):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Teeth challenge Training')
-    parser.add_argument('--csv_train', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/IOSReg/renamed_segmented/train_palete.csv')    
+    parser.add_argument('--csv_train', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/IOSReg/renamed_segmented/train_palete_denise.csv')    
     parser.add_argument('--csv_valid', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data/csv/val_UL1O.csv')
     parser.add_argument('--csv_test', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/data/csv/test_UL1O.csv')      
     parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='Learning rate')
@@ -197,14 +206,14 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', help='Max number of epochs', type=int, default=200)    
     parser.add_argument('--model', help='Model to continue training', type=str, default= None)
     parser.add_argument('--out', help='Output', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Test/random_rotation")
-    parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/IOSReg/renamed_segmented/")
+    parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/IOSReg/renamed_segmented/Denise/")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
     parser.add_argument('--batch_size', help='Batch size', type=int, default=1)    
     parser.add_argument('--train_sphere_samples', help='Number of training sphere samples or views used during training and validation', type=int, default=4)    
     parser.add_argument('--patience', help='Patience for early stopping', type=int, default=4)
     parser.add_argument('--profiler', help='Use a profiler', type=str, default=None)
     parser.add_argument('--property', help='label of segmentation', type=str, default="PredictedID")
-    parser.add_argument('--landmark',help='name of landmark to found',default=['L2RM'])
+    parser.add_argument('--landmark',help='name of landmark to found',default=['L2RM','R2RM','L3RM','R3RM','L3RL','R3RL','RPR','LPR'])
     
     
     parser.add_argument('--tb_dir', help='Tensorboard output dir', type=str, default='/home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth/tensorboard')

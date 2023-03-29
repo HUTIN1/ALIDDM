@@ -28,7 +28,7 @@ def main(args):
 
     checkpoint_callback = ModelCheckpoint(
         dirpath=args.out,
-        filename=f'{args.landmark}'+'{epoch}-{val_loss:.2f}_unet_resnet_cosine',
+        filename=f'{args.landmark}'+'{epoch}-{val_loss:.2f}_segPatch',
         save_top_k=2,
         monitor='val_loss'
     )
@@ -42,9 +42,9 @@ def main(args):
     # class_weights = np.load(os.path.join(mount_point, 'train_weights.npy'))
     class_weights = None
     if args.load_checkpoint :
-        model = MonaiUnetCosine.load_from_checkpoint(args.load_checkpoint)
+        model = MonaiUNetHRes.load_from_checkpoint(args.load_checkpoint)
     else :
-        model = MonaiUnetCosine(args, out_channels = 2, class_weights=class_weights, image_size=320, train_sphere_samples=args.train_sphere_samples,radius=1.6)
+        model = MonaiUNetHRes(args, out_channels = 9, class_weights=class_weights, image_size=320, train_sphere_samples=args.train_sphere_samples,radius=1.6)
 
     train_transfrom = MyCompose([UnitSurfTransform()])
 
@@ -58,13 +58,13 @@ def main(args):
         logger = TensorBoardLogger(save_dir=args.tb_dir, name=args.tb_name)    
 
 
-    # image_logger = TeethNetImageLoggerLm(log_steps=args.log_every_n_steps)
+    image_logger = TeethNetImageLoggerLm(log_steps=args.log_every_n_steps)
 
     trainer = Trainer(
         logger=logger,
         max_epochs=args.epochs,
         log_every_n_steps=args.log_every_n_steps,
-        callbacks=[early_stop_callback, checkpoint_callback],#,image_logger],
+        callbacks=[early_stop_callback, checkpoint_callback,image_logger],
         devices=torch.cuda.device_count(), 
         accelerator="gpu", 
         strategy=DDPStrategy(find_unused_parameters=False, process_group_backend="nccl"),
@@ -81,22 +81,22 @@ if __name__ == '__main__':
 
 
     parser = argparse.ArgumentParser(description='Teeth challenge Training')
-    parser.add_argument('--csv_train', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/IOSReg/renamed_segmented/train_palete.csv')    
-    parser.add_argument('--csv_valid', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/IOSReg/renamed_segmented/val_palete.csv')
+    parser.add_argument('--csv_train', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/IOSReg/renamed_segmented/train_palete_denise.csv')    
+    parser.add_argument('--csv_valid', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/IOSReg/renamed_segmented/val_palete_denise.csv')
     parser.add_argument('--csv_test', help='CSV with column surf', type=str, default='/home/luciacev/Desktop/Data/IOSReg/renamed_segmented//test_palete.csv')      
     parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='Learning rate')
     parser.add_argument('--log_every_n_steps', help='Log every n steps', type=int, default=10)    
-    parser.add_argument('--epochs', help='Max number of epochs', type=int, default=500)    
+    parser.add_argument('--epochs', help='Max number of epochs', type=int, default=1000)    
     parser.add_argument('--model', help='Model to continue training', type=str, default= None)
     parser.add_argument('--out', help='Output', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/CNN/model/")
-    parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/IOSReg/renamed_segmented/")
+    parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/IOSReg/renamed_segmented/Denise")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
-    parser.add_argument('--batch_size', help='Batch size', type=int, default=5)    
+    parser.add_argument('--batch_size', help='Batch size', type=int, default=60)    
     parser.add_argument('--train_sphere_samples', help='Number of training sphere samples or views used during training and validation', type=int, default=4)    
-    parser.add_argument('--patience', help='Patience for early stopping', type=int, default=50)
+    parser.add_argument('--patience', help='Patience for early stopping', type=int, default=70)
     parser.add_argument('--profiler', help='Use a profiler', type=str, default=None)
     parser.add_argument('--property', help='label of segmentation', type=str, default="PredictedID")
-    parser.add_argument('--landmark',help='name of landmark to found',default=['L2RM'])
+    parser.add_argument('--landmark',help='name of landmark to found',default=['L2RM','R2RM','L3RM','R3RM','L3RL','R3RL','RPR','LPR'])
     parser.add_argument('--load_checkpoint')
     
     

@@ -31,8 +31,9 @@ from utils import(
     ComputeNormals,
     GetColorArray,
     RandomRotation,get_landmarks_position, pos_landmard2texture, pos_landmard2seg, TransformSurf,TransformRotationMatrix,RandomRotationZ,
-    pos_landmard2seg_special,pos_landmard2texture_special
+    pos_landmard2seg_special,pos_landmard2texture_special,pos_Tshape_texture
 )
+from utils2 import rectangle_patch_texture
 
 
 class TeethDataModuleLm(pl.LightningDataModule):
@@ -147,7 +148,7 @@ class TeethDatasetLm(Dataset):
 
             surf = ReadSurf(os.path.join(self.mount_point,self.df.iloc[index]["surf"]))
 
-        surf, matrix = PrePreAso(surf,[[-0.5,-0.5,0],[0,0.5,0],[0.5,-0.5,0]],['4','9','10','15'])
+        surf, matrix = PrePreAso(surf,[[-0.5,-0.5,0],[0,0.5,0],[0.5,-0.5,0]],['5','9','10','12'])
 
   
 
@@ -382,7 +383,7 @@ class TeethDatasetPatch(Dataset):
 
             surf = ReadSurf(os.path.join(self.mount_point,self.df.iloc[index]["surf"][1:]))
 
-        surf, matrix = PrePreAso(surf,[[-0.5,-0.5,0],[0,0.5,0],[0.5,-0.5,0]],['5','9','10','14'])
+        surf, matrix = PrePreAso(surf,[[-0.5,-0.5,0],[0,0,0],[0.5,-0.5,0]],['3','8','9','14'])
 
   
 
@@ -425,17 +426,24 @@ class TeethDatasetPatch(Dataset):
 
             pos_landmark = get_landmarks_position(os.path.join(self.mount_point,self.df.iloc[index]["landmark"][1:]),self.landmark,matrix,dic=True)
 
+            pos_landmark = (pos_landmark[self.landmark[0]] + pos_landmark[self.landmark[1]])/2
 
 
 
-            LF = pos_landmard2seg_special(V,pos_landmark)
-            faces_pid0 = F[:,0:1]       
-            LF = torch.take(LF, faces_pid0)            
-            LF = LF.to(torch.int64)
+
+            # LF = pos_landmard2seg_special(V,pos_landmark)
+            # faces_pid0 = F[:,0:1]       
+            # LF = torch.take(LF, faces_pid0)            
+            # LF = LF.to(torch.int64)
+
+            LF = torch.tensor(0)
 
             if self.test:
-                CL = pos_landmard2texture_special(V,pos_landmark)
+                print('test')
+                # CL = pos_landmard2texture_special(V,pos_landmark)
+                # CL = pos_Tshape_texture(V,pos_landmark)
                 # CL = pos_landmard2seg(V,pos_landmark)
+                CL = rectangle_patch_texture(surf,matrix)
                 return V, F, CN, CL, pos_landmark
             
             return V, F, CN, LF
@@ -449,14 +457,14 @@ class TeethDatasetPatch(Dataset):
         if isinstance(self.df,list):
             surf = ReadSurf(self.df[idx])
         else :
-            surf = ReadSurf(os.path.join(self.mount_point,self.df.iloc[idx]["surf"]))
+            surf = ReadSurf(os.path.join(self.mount_point,self.df.iloc[idx]["surf"][1:]))
         return surf
     
     def getName(self,idx):
         if isinstance(self.df,list):
             path = self.df[idx]
         else :
-            path = os.path.join(self.mount_point,self.df.iloc[idx]["surf"])
+            path = os.path.join(self.mount_point,self.df.iloc[idx]["surf"][1:])
         name = os.path.basename(path)
         name , _ = os.path.splitext(name)
 

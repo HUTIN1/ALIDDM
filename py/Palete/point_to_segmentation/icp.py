@@ -33,7 +33,7 @@ def PrePreAso(source,target,landmarks):
     right = landmarks[3]
 
          
-    meanTeeth = vtkMeanTeeth([int(left),int(middle1),int(middle2),int(right)],property='PredictedID')
+    meanTeeth = vtkMeanTeeth([int(left),int(middle1),int(middle2),int(right)],property='Universal_ID')
     mean_source = meanTeeth(source)
 
     left_source, middle1_source, middle2_source , right_source = mean_source[left], mean_source[middle1], mean_source[middle2],mean_source[right]

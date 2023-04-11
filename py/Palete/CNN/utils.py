@@ -19,6 +19,7 @@ import json
 import matplotlib.pyplot as plt
 
 
+
 def search(path,*args):
     """
     Return a dictionary with args element as key and a list of file in path directory finishing by args extension for each key
@@ -227,10 +228,17 @@ def RandomRotation(surf):
     return RotateSurf(surf, rotationAngle, rotationVector), rotationAngle, rotationVector
 
 def RandomRotationZ(surf):
-    rotationAngle = np.random.random()*360.0
-    rotationVector = np.random.random(2)*0.3 - 0.15
-    # rotationVector = np.array([0,0])
-    rotationVector = np.append(rotationVector,1)
+    # rotationAngle = np.random.random()*360.0
+    # rotationVector = np.random.random(2)*0.3 - 0.15
+    # # rotationVector = np.array([0,0])
+    # rotationVector = np.append(rotationVector,1)
+    # rotationVector = rotationVector/np.linalg.norm(rotationVector)
+
+    # rotationAngle = np.random.random()*360.0
+    # rotationVector = np.random.random(2)*0.3 - 0.15
+    rotationVector = np.array([1,0,0])
+    rotationAngle = np.array(-80)
+    # rotationVector = np.append(rotationVector,1)
     rotationVector = rotationVector/np.linalg.norm(rotationVector)
     
     return RotateSurf(surf, rotationAngle, rotationVector), rotationAngle, rotationVector
@@ -744,7 +752,7 @@ def pos_landmard2texture_special(vertex,landmarks_pos):
     texture = torch.zeros_like(vertex.unsqueeze(0))
     vertex = vertex.to(torch.float64)
     radius = 0.025
-    dic = {'L2RM' :3,'R2RM':3,'L3RM':3,'R3RM':3,'R3RL':1.5,'L3RL':1.5,'RPR':1.5,'LPR':1.5}
+    dic = {'L2RM' :4,'R2RM':4,'L3RM':9,'R3RM':9,'R3RL':1.5,'L3RL':1.5,'RPR':1.5,'LPR':1.5}
 
     for idx , items in enumerate(landmarks_pos.items()) :
         label, landmark_pos = items
@@ -756,6 +764,35 @@ def pos_landmard2texture_special(vertex,landmarks_pos):
 
         texture[0,index_pos_land,1]=(idx+1)/len(landmarks_pos) 
     return texture
+
+
+def pos_Tshape_texture(vertex,landmark_pos):
+    texture = torch.zeros_like(vertex.unsqueeze(0))
+
+    #T lateral
+    largeur_y_anterior = 0.02
+    largeur_y_posterior = 0.13
+    largeur_x = 0.2
+
+
+
+    projection_on_landmark = vertex - landmark_pos
+
+    arg = torch.argwhere((projection_on_landmark[:,1] < largeur_y_anterior ) & (projection_on_landmark[:,1] > -largeur_y_posterior) & ( torch.abs(projection_on_landmark[:,0]) < largeur_x ) )
+    texture[0,arg,1] = 255
+
+
+    #T anterior
+    largeur_y_anterior = 0.08
+    largeur_y_posterior = 0.5
+    largeur_x = 0.1
+
+    arg = torch.argwhere((projection_on_landmark[:,1] < largeur_y_anterior ) & (projection_on_landmark[:,1] > -largeur_y_posterior) & ( torch.abs(projection_on_landmark[:,0]) < largeur_x ) )
+    texture[0,arg,1] = 255
+
+
+    return texture
+
 def arrayFromVTKMatrix(vmatrix):
   """Return vtkMatrix4x4 or vtkMatrix3x3 elements as numpy array.
   The returned array is just a copy and so any modification in the array will not affect the input matrix.
@@ -811,6 +848,7 @@ def TransformSurf(surf,matrix):
     surf = RotateTransform(surf,transform)
 
     return surf
+
 
 
 def image_grid(

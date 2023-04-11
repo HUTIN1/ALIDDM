@@ -29,7 +29,7 @@ import matplotlib.pyplot as plt
 from utils import WriteSurf
 from torch import tensor
 from PIL import Image
-
+from vtk.util.numpy_support import  numpy_to_vtk
 
 import utils
 
@@ -72,11 +72,12 @@ def main(args):
     train_transfrom = MyCompose([UnitSurfTransform()])
     # train_transfrom = MyCompose([PickLandmarkTransform(args.landmark,args.property)])
     radius = 1.6
-    model = MonaiUnetCosine(args, out_channels = 2, class_weights=class_weights, image_size=320, train_sphere_samples=args.train_sphere_samples,radius=radius)
+    model = MonaiUNetHRes(args, out_channels = 2, class_weights=class_weights, image_size=320, train_sphere_samples=args.train_sphere_samples,radius=radius)
 
-    # path_scan = utils.search('/home/luciacev/Desktop/Data/IOSReg/renamed_segmented/Aron_datas/','.vtk')['.vtk']
+    # path_scan = utils.search('/home/luciacev/Desktop/Data/IOSReg/Felicia/oriented/T1/Upper','.vtk')['.vtk']
+    # print(path_scan)
     # train_ds  = TeethDatasetLmCoss(mount_point = args.mount_point, df = df_train ,surf_property = args.property,transform =train_transfrom,landmark=args.landmark ,test=True,random_rotation=True)
-    train_ds  = TeethDatasetPatch(mount_point = args.mount_point, df = df_train ,surf_property = args.property,transform =train_transfrom,landmark=args.landmark ,test=True,random_rotation=True)
+    train_ds  = TeethDatasetPatch(mount_point = args.mount_point, df = df_train ,surf_property = args.property,transform =train_transfrom,landmark=args.landmark ,test=True)
     
     dataloader = DataLoader(train_ds, batch_size=1, num_workers=args.num_workers, persistent_workers=True, pin_memory=True)
     
@@ -91,50 +92,56 @@ def main(args):
 
     # iterdata= iter(dataloader)
     # data = next(iterdata)
-    data = train_ds[0]
-    print(f'name {train_ds.getName(0)}')
+    data = train_ds[1]
+    print(f'name {train_ds.getName(1)}')
     V, F, CN, CL, landmarks = data
+    # V, F, CN = data
     # V, F, CN, CL, vector , distance = data
     V = V.unsqueeze(0)
     F = F.unsqueeze(0) 
     CN = CN.unsqueeze(0)
-    # CL = CL.squeeze(0)
+    CL = CL.unsqueeze(0)
 
     # landmark = vector * distance
     # print(f'landmark pos in display {landmark}')
 
     print('V.size()',V.size())
     print('F.size()',F.size())
-    print('CL.shape',CL.shape)
+    # print('CL.shape',CL.shape)
     # print(f'color map {torch.unique(CL)}')
 
     # a = torch.linspace(-0.75,0.75,4)
     # ico_verts = torch.tensor([[x.item(),y.item(),0.75] for x in a for y in a]).to(torch.float32) 
     # ico_verts  = ico_sphere(1).verts_packed()
-    ico_verts, ico_faces = utils.PolyDataToTensors(utils.CreateIcosahedron(radius=1, sl=2))
-    # ico_verts[...,2] = ico_verts[...,2]+0.5
-    ico_verts = ico_verts.to(torch.float32)
-    ico_list = []
-    for ico in ico_verts :
-        if ico[1] < 0  and ico[2] > 0:
-            ico_list.append(ico.unsqueeze(0))
-    ico_verts = torch.cat(ico_list,dim=0)
-    for idx, v in enumerate(ico_verts):
-        # if (torch.abs(torch.sum(v)) == radius):
-            ico_verts[idx] = v + torch.normal(0.0, 1e-7, (3,))
+    # ico_verts, ico_faces = utils.PolyDataToTensors(utils.CreateIcosahedron(radius=1, sl=2))
+    # # ico_verts[...,2] = ico_verts[...,2]+0.5
+    # ico_verts = ico_verts.to(torch.float32)
+    # ico_list = []
+    # for ico in ico_verts :
+    #     if ico[1] < 0  and ico[2] > 0:
+    #         ico_list.append(ico.unsqueeze(0))
+    # ico_verts = torch.cat(ico_list,dim=0)
+    # for idx, v in enumerate(ico_verts):
+    #     # if (torch.abs(torch.sum(v)) == radius):
+    #         ico_verts[idx] = v + torch.normal(0.0, 1e-7, (3,))
 
-    ico_verts = torch.tensor([[0,0,1]],device=device).to(torch.float32)
+    # ico_verts = torch.tensor([[0,0,1]],device=device).to(torch.float32)
     # # sphere =  Pointclouds(points=[sphere_verts])
 
     # matrix_rotation = torch.tensor(utils.RotationMatrix(np.array([1,0,0]),np.array(3.1415/8))).to(torch.float32)
     # ico_verts = torch.matmul(matrix_rotation,ico_verts.t()).t()
-
+    # for i in range(1,3):
+    #      CL2 = CL
+    #      CNL = CN
+    #      index = torch.argwhere(CL2)
+    #      CNL[index] = i*5
+    #      CL2 = CL
     texture = TexturesVertex(CL)
     print(f'V { V.shape}, F {F.shape}')
     mesh = Meshes(verts=V,faces=F,textures=texture)
     V = V.to(device)
     F = F.to(device)
-    CL = CL.to(device)
+    # CL = CL.to(device)
     CN = CN.to(device)
     X, PF = model.render(V, F, CN)
     # R=[]
@@ -165,7 +172,7 @@ def main(args):
         # 'cam' : cam,
         # 'point cam': ListToMesh(t.tolist()),
         # 'landmark' : ListToMesh(landmark.tolist(),radius=0.01)
-        'landmarks': ListToMesh(landmarks.values(),radius=0.01)
+        # 'landmarks': ListToMesh(landmarks.values(),radius=0.01)
     }
     })
     fig.show()
@@ -191,7 +198,18 @@ def main(args):
 
 
 
+    # surf = train_ds.getSurf(1)
+    # name = train_ds.getName(1)
 
+    # V_labels_prediction = torch.where(CL[0,:,1] == 255,1,0)
+    # print(V_labels_prediction.shape)
+
+    # V_labels_prediction = numpy_to_vtk(V_labels_prediction.numpy())
+    # V_labels_prediction.SetName('Palete')
+    # surf.GetPointData().AddArray(V_labels_prediction)
+
+    # path_out = '/home/luciacev/Desktop/Data/IOSReg/ARON_GOLD/organize/test/seg/'
+    # WriteSurf(surf,os.path.join(path_out,f'{name}_test_seg_reg.vtk'))
 
     
 
@@ -213,7 +231,7 @@ if __name__ == '__main__':
     parser.add_argument('--patience', help='Patience for early stopping', type=int, default=4)
     parser.add_argument('--profiler', help='Use a profiler', type=str, default=None)
     parser.add_argument('--property', help='label of segmentation', type=str, default="PredictedID")
-    parser.add_argument('--landmark',help='name of landmark to found',default=['L2RM','R2RM','L3RM','R3RM','L3RL','R3RL','RPR','LPR'])
+    parser.add_argument('--landmark',help='name of landmark to found',default=['L3RM','R3RM'])
     
     
     parser.add_argument('--tb_dir', help='Tensorboard output dir', type=str, default='/home/luciacev/Desktop/Data/Flybycnn/SegmentationTeeth/tensorboard')

@@ -129,9 +129,9 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Teeth challenge prediction')
     parser.add_argument('--input',help='path folder',type=str,default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/denise/scan/')      
-    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/CNN/model/['L2RM']epoch=101-val_loss=0.12_monairesnet_cosine.ckpt")
+    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/CNN/model/['L2RM']epoch=113-val_loss=0.09_monairesnet_cosine.ckpt")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
-    parser.add_argument('--out', help='Output', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/Aron/json/')
+    parser.add_argument('--out', help='Output', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/denise/json/')
     parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/denise/json2/")
     parser.add_argument('--array_name',type=str, help = 'Predicted ID array name for output vtk', default="PredictedID")
     parser.add_argument('--landmark',default='L2RM')

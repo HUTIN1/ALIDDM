@@ -20,6 +20,7 @@ from vtk.util.numpy_support import  numpy_to_vtk
 from pytorch3d.structures import Meshes, Pointclouds
 from pytorch3d.vis.plotly_vis import  plot_scene
 from pytorch3d.utils import ico_sphere
+from post_process import RemoveIslands, ErodeLabel, DilateLabel
 
 import matplotlib.pyplot as plt
 def ListToMesh(list,radius=0.01):
@@ -47,9 +48,9 @@ def main(args):
 
 
     class_weights = None
-    out_channels = 9
+    out_channels = 3
 
-    model = MonaiUNetHRes(args, out_channels = 9, class_weights=class_weights, image_size=320, train_sphere_samples=4, subdivision_level=2,radius=1.6)
+    model = MonaiUNetHRes(args, out_channels = 3, class_weights=class_weights, image_size=320, train_sphere_samples=4, subdivision_level=2,radius=1.6)
 
     model.load_state_dict(torch.load(args.model)['state_dict'])
 
@@ -88,7 +89,7 @@ def main(args):
             PF = PF.squeeze()
             x = x.squeeze()
 
-            print(f'PF : {PF.shape}, x : {x.shape}, P_faces : {P_faces.shape}, V_labels_prediction { V_labels_prediction.shape}')
+            # print(f'PF : {PF.shape}, x : {x.shape}, P_faces : {P_faces.shape}, V_labels_prediction { V_labels_prediction.shape}')
 
             for pf, pred in zip(PF, x):
                 P_faces[:, pf] += pred
@@ -100,10 +101,27 @@ def main(args):
 
             surf = ds.getSurf(idx)
 
+            V_labels_prediction = torch.where(V_labels_prediction >= 1, 1, 0)
+
             V_labels_prediction = numpy_to_vtk(V_labels_prediction.cpu().numpy())
             V_labels_prediction.SetName('Palete')
             surf.GetPointData().AddArray(V_labels_prediction)
-            WriteSurf(surf,os.path.join(args.out,f'{name}_palete.vtk'))
+
+            # WriteSurf(surf,os.path.join(args.out,f'{name}_palete.vtk'))
+
+            #Post Process
+            RemoveIslands(surf,V_labels_prediction,33,500, ignore_neg1=True)
+            for label in range(2):
+                RemoveIslands(surf,V_labels_prediction, label, 200, ignore_neg1=True)
+
+
+
+
+            for label in range(1,2):
+                DilateLabel(surf,V_labels_prediction, label, iterations=2, dilateOverTarget=False, target = None)
+                ErodeLabel(surf,V_labels_prediction, label, iterations=2, target=None)
+
+            WriteSurf(surf,os.path.join(args.out,f'{name}.vtk'))
 
 
 
@@ -114,12 +132,12 @@ if __name__ == '__main__':
 
 
     parser = argparse.ArgumentParser(description='Teeth challenge prediction')
-    parser.add_argument('--input',help='path folder',type=str,default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/Aron/scan/')      
-    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Training/CNN/model/['L2RM', 'R2RM', 'L3RM', 'R3RM', 'L3RL', 'R3RL', 'RPR', 'LPR']epoch=39-val_loss=1.46_segPatch.ckpt")
+    parser.add_argument('--input',help='path folder',type=str,default='/home/luciacev/Desktop/Data/IOSReg/Meg/T2_Orientation-Centroid/Upper/')      
+    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Model/['L3RM', 'R3RM']epoch=1211-val_loss=0.92_unetseg_gold.ckpt")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
-    parser.add_argument('--out', help='Output', type=str, default='/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/Aron/json/')
-    parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/denise/json2/")
-    parser.add_argument('--array_name',type=str, help = 'Predicted ID array name for output vtk', default="PredictedID")
+    parser.add_argument('--out', help='Output', type=str, default='/home/luciacev/Desktop/Data/IOSReg/Meg/T2_seg/T2_palete')
+    parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/Aron/json2/")
+    parser.add_argument('--array_name',type=str, help = 'Predicted ID array name for output vtk', default="Universal_ID")
     parser.add_argument('--landmark',default='L2RM')
 
 

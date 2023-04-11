@@ -144,26 +144,31 @@ class MonaiUNetHRes(pl.LightningModule):
 
 
     def setup_ico_verts(self):
-        ico_verts, ico_faces = utils.PolyDataToTensors(utils.CreateIcosahedron(radius=0.1, sl=2))
+        # ico_verts, ico_faces = utils.PolyDataToTensors(utils.CreateIcosahedron(radius=0.1, sl=2))
 
-        ico_list = []
-        for ico in ico_verts :
-            if ico[1] < 0 and ico[2]> 0:
-                ico_list.append(ico.unsqueeze(0))
+        # ico_list = []
+        # for ico in ico_verts :
+        #     if ico[1] < 0 and ico[2]> 0:
+        #         ico_list.append(ico.unsqueeze(0))
 
-        ico_verts = torch.cat(ico_list,dim=0)
+        # ico_verts = torch.cat(ico_list,dim=0)
 
-        # ico_verts[...,:2] = ico_verts[...,:2] + 0.5
-        ico_verts = ico_verts.to(torch.float32)
-        for idx, v in enumerate(ico_verts):
-            # if (torch.abs(torch.sum(v)) == radius):
-                ico_verts[idx] = v + torch.normal(0.0, 1e-7, (3,))
+        # # ico_verts[...,:2] = ico_verts[...,:2] + 0.5
+        # ico_verts = ico_verts.to(torch.float32)
+        # for idx, v in enumerate(ico_verts):
+        #     # if (torch.abs(torch.sum(v)) == radius):
+        #         ico_verts[idx] = v + torch.normal(0.0, 1e-7, (3,))
 
 
         
-        # self.register_buffer("ico_verts", ico_verts)
-        self.ico_verts = ico_verts
+        # # self.register_buffer("ico_verts", ico_verts)
+        # self.ico_verts = ico_verts
+        # self.number_image = self.ico_verts.shape[0]
+
+        self.ico_verts = torch.tensor([[0,0,0.9],[0.2,0,0.9],[-0.2,0,0.9],[0,0.2,0.9],[0,-0.2,0.9],[-0.2,-0.2,0.9],[0.2,-0.2,0.9]],device=self.device).to(torch.float32)
         self.number_image = self.ico_verts.shape[0]
+
+
 
 
     def setup_render(self):
@@ -221,7 +226,7 @@ class MonaiUNetHRes(pl.LightningModule):
 
         PF = []
         X = []
-        self.ico_verts = torch.tensor([[0,0,0.9],[0.2,0,0.9],[-0.2,0,0.9]],device=self.device).to(torch.float32)
+        # self.ico_verts = torch.tensor([[0,0,0.9],[0.2,0,0.9],[-0.2,0,0.9]],device=self.device).to(torch.float32)
         for camera_position in self.ico_verts:
 
             camera_position = camera_position.unsqueeze(0).to(self.device)
@@ -355,10 +360,14 @@ class MonaiUnetCosine(pl.LightningModule):
         # net1 = TimeDistributed(unet)
         # densnet = monai.networks.nets.densenet.DenseNet201(spatial_dims = 2, in_channels= 3,out_channels = 4)
         # net2 = TimeDistributed2(densnet)
-        res = resnet.resnet152(
+        res = resnet.ResNet(
+            block = resnet.ResNetBottleneck,
+            layers=[3,4,6,3],
+            block_inplanes=resnet.get_inplanes(),
             spatial_dims=2,
             n_input_channels=4,
             num_classes=4
+
         )
         net3 = TimeDistributed2(res)
         self.net = net3

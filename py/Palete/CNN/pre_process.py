@@ -13,7 +13,7 @@ import numpy as np
 import vtk
 
 
-from icp import vtkMeanTeeth, PrePreAso
+from icp import vtkMeanTeeth, PrePreAso, ToothNoExist
 from utils import ReadSurf, RandomRotation, WriteSurf, search
 from tqdm import tqdm
 
@@ -23,8 +23,8 @@ from segmented_from_point import Segmentation
 
 
 
-path = '/home/luciacev/Desktop/Data/IOSReg/ARON_GOLD/organize/Oriented/T2_seg/'
-path_out = '/home/luciacev/Desktop/Data/IOSReg/ARON_GOLD/organize/Oriented/T2_testseg/'
+path = '/home/luciacev/Desktop/Data/IOSReg/ARON_GOLD/organize/Oriented/T1_seg/'
+path_out = '/home/luciacev/Desktop/Data/IOSReg/ARON_GOLD/organize/Oriented/T1_testseg/'
 files = search(path,'.vtk')['.vtk']
 centroidf = vtkMeanTeeth([5,6,11,12,3,14],property='Universal_ID')
 ratio_rect = 0.3
@@ -34,10 +34,14 @@ for file in tqdm(files) :
     surf_out = vtk.vtkPolyData()
     surf_out.DeepCopy(surf)
 
-    surf, matrix = PrePreAso(surf,[[-0.5,-0.5,0],[0,0,0],[0.5,-0.5,0]],['3','8','9','14'])
+    try :
+        surf, matrix = PrePreAso(surf,[[-0.5,-0.5,0],[0,0,0],[0.5,-0.5,0]],['3','8','9','14'])
+        centroid = centroidf(surf)
+    except ToothNoExist as error :
+        print(f'Error {error}, file : {file}')
 
 
-    centroid = centroidf(surf)
+    
     V = torch.tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(torch.float32)
     
     haut_gauche1 = (centroid['5']+centroid['6'])/2

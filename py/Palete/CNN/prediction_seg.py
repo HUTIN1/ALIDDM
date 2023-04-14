@@ -21,6 +21,7 @@ from pytorch3d.structures import Meshes, Pointclouds
 from pytorch3d.vis.plotly_vis import  plot_scene
 from pytorch3d.utils import ico_sphere
 from post_process import RemoveIslands, ErodeLabel, DilateLabel
+from torchvision.transforms import GaussianBlur
 
 import matplotlib.pyplot as plt
 def ListToMesh(list,radius=0.01):
@@ -48,9 +49,9 @@ def main(args):
 
 
     class_weights = None
-    out_channels = 3
+    out_channels = 2
 
-    model = MonaiUNetHRes(args, out_channels = 3, class_weights=class_weights, image_size=320, train_sphere_samples=4, subdivision_level=2,radius=1.6)
+    model = MonaiUNetHRes(args, out_channels = 2, class_weights=class_weights, image_size=320, train_sphere_samples=4, subdivision_level=2,radius=1.6)
 
     model.load_state_dict(torch.load(args.model)['state_dict'])
 
@@ -68,6 +69,8 @@ def main(args):
 
     softmax = torch.nn.Softmax(dim=2)
 
+    gauss_filter = GaussianBlur(15)
+
     with torch.no_grad():
 
         for idx, batch in tqdm(enumerate(dataloader), total=len(dataloader)):
@@ -83,28 +86,44 @@ def main(args):
             x, X, PF = model((V, F, CN))
             x = softmax(x*(PF>=0))
 
+            x = torch.argmax(x,dim=2)
+
+            x = torch.where(gauss_filter(x) > 0.7,1,0) 
+
+
+            # print(f'x shape {x.shape} ,unique {torch.unique(x)}')
+
+            # quit()
+
             P_faces = torch.zeros(out_channels, F.shape[1]).to(device)
+            P_faces = torch.zeros(F.shape[1]).to(device).to(torch.int64)
             V_labels_prediction = torch.zeros(V.shape[1]).to(device).to(torch.int64)
 
             PF = PF.squeeze()
-            x = x.squeeze()
+            x = x.squeeze(0)
+
+            # print(f'PF {PF.shape}, x {x.shape}, P_faces {P_faces.shape}')
 
             # print(f'PF : {PF.shape}, x : {x.shape}, P_faces : {P_faces.shape}, V_labels_prediction { V_labels_prediction.shape}')
 
-            for pf, pred in zip(PF, x):
-                P_faces[:, pf] += pred
+            # for pf, pred in zip(PF, x):
+            #     # P_faces[:, pf] += pred
+            #     P_faces[pf] += pred
+            P_faces[PF] = x
 
-            P_faces = torch.argmax(P_faces, dim=0)
+            # P_faces = torch.argmax(P_faces, dim=0)
 
             faces_pid0 = F[0,:,0]
+            # print(f'shape face pid0 {faces_pid0.shape}, P_faces : {P_faces.shape}')
             V_labels_prediction[faces_pid0] = P_faces
+            
 
             surf = ds.getSurf(idx)
 
             V_labels_prediction = torch.where(V_labels_prediction >= 1, 1, 0)
 
             V_labels_prediction = numpy_to_vtk(V_labels_prediction.cpu().numpy())
-            V_labels_prediction.SetName('Palete')
+            V_labels_prediction.SetName('Palete_gauss')
             surf.GetPointData().AddArray(V_labels_prediction)
 
             # WriteSurf(surf,os.path.join(args.out,f'{name}_palete.vtk'))
@@ -132,10 +151,10 @@ if __name__ == '__main__':
 
 
     parser = argparse.ArgumentParser(description='Teeth challenge prediction')
-    parser.add_argument('--input',help='path folder',type=str,default='/home/luciacev/Desktop/Data/IOSReg/Meg/T2_Orientation-Centroid/Upper/')      
-    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Model/['L3RM', 'R3RM']epoch=1211-val_loss=0.92_unetseg_gold.ckpt")
+    parser.add_argument('--input',help='path folder',type=str,default='/home/luciacev/Desktop/Data/IOSReg/ARON_GOLD/organize/test/test/')      
+    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Downloads/['L3RM', 'R3RM']epoch=1085-val_loss=0.365_unetseg_butterflies.ckpt")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
-    parser.add_argument('--out', help='Output', type=str, default='/home/luciacev/Desktop/Data/IOSReg/Meg/T2_seg/T2_palete')
+    parser.add_argument('--out', help='Output', type=str, default='/home/luciacev/Desktop/Data/IOSReg/ARON_GOLD/organize/test/test/')
     parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/Aron/json2/")
     parser.add_argument('--array_name',type=str, help = 'Predicted ID array name for output vtk', default="Universal_ID")
     parser.add_argument('--landmark',default='L2RM')

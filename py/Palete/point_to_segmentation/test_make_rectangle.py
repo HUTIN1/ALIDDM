@@ -37,20 +37,42 @@ def ListToMesh(list,radius=0.5):
 
     return mesh
 
+class Segment2D :
+    def __init__(self,point1,point2,name_point1 =None , name_point2 = None) -> None:
+        self.point1 = np.array(point1)
+        self.point2 = np.array(point2)
+        self.a = point2[0] - point1[0]
+        self.b = point2[1] - point1[1]
+
+        self.x0 = point1[0]
+        self.y0 = point1[1] 
+
+        self.name_point1 = name_point1
+        self.name_point2 = name_point2
+
+        # print(f' a : {self.a}, b : {self.b}, x0 : {self.x0}, y0 : {self.y0}')
+
+    def __call__(self, t) :
+        x , y = self.x0 + self.a * t , self.y0 + self.b * t
+
+        return np.array([x ,y])
+    
+
 def Bezier_bled(point1,point2,point3,pas):
     range = np.arange(0,1,pas)
     matrix_t = np.array([np.square( 1 - range) , 2*(1 - range)*range, np.square(range)]).T
     matrix_point = np.array([[point1],[point2],[point3]]).squeeze()
-    print(f'shape matrix_t {matrix_t.shape}, matrix point {matrix_point.shape}')
+    # print(f'shape matrix_t {matrix_t.shape}, matrix point {matrix_point.shape}')
     return np.matmul(matrix_t,matrix_point)
 
 def Neighbours(arg_point,F):
     neighbours = torch.tensor([]).cuda()
-    for arg_p in arg_point :
-        arg_p = arg_p.to(torch.int64)
-        arg = torch.argwhere((F-arg_p) == 0)
-        neighbours = torch.cat((neighbours,torch.unique(F[arg[:,0],:])))
-    neighbours = torch.unique(neighbours)
+    F2 = F.unsqueeze(0).expand(len(arg_point),-1,-1)
+    arg_point = arg_point.unsqueeze(1).unsqueeze(2)
+    arg = torch.argwhere((F2-arg_point) == 0)
+    # print(f' arg {arg.shape}, arg : {arg}')
+
+    neighbours = torch.unique(F[arg[:,1],:])
     return neighbours
 
 # def NoIntersection(t1,t2):
@@ -64,26 +86,34 @@ def Neighbours(arg_point,F):
 #     difference = uniques[counts == 1]
 #     return difference
 
+def Difference(t1,t2):
+    # print(f't2 : {t2}')
+    # print(f't1 shape {t1.shape}')
+    t1 = t1.unsqueeze(0).expand(len(t2),-1)
+    t2 = t2.unsqueeze(1)
+    d = torch.count_nonzero(t1 -t2,dim=-1)
+    arg = torch.argwhere(d == t1.shape[1])
+    dif = torch.unique(t2[arg])
+    return dif
+
 def Dilation(arg_point,V,F,texture):
     arg_point = torch.tensor([arg_point]).cuda().to(torch.int64)
     F = F.cuda()
     texture = texture.cuda()
     neighbour = Neighbours(arg_point,F)
-    arg_texture = torch.argwhere(texture == 1)
+    arg_texture = torch.argwhere(texture == 1).squeeze()
     # dif = NoIntersection(arg_texture,neighbour)
     dif = neighbour.to(torch.int64)
-    for arg_text in arg_texture :
-        dif = dif[dif != arg_text]
+    dif = Difference(arg_texture,dif)
     n = 0
-    while len(dif)!= 0 and n < 50:
+    while len(dif)!= 0 and n < 80:
         print(f'n = {n}, len : {len(dif)}')
         texture[dif] = 1
         neighbour = Neighbours(dif,F)
-        arg_texture = torch.argwhere(texture == 1)
+        arg_texture = torch.argwhere(texture == 1).squeeze()
         # dif = NoIntersection(arg_texture,neighbour)
         dif = neighbour.to(torch.int64)
-        for arg_text in arg_texture :
-            dif = dif[dif != arg_text]
+        dif = Difference(arg_texture,dif)
         n+=1
     return texture
 
@@ -209,10 +239,12 @@ v_bezier = bezier - np.expand_dims(bas_gauche[:2],axis=0)
 v_norm_bezier = np.expand_dims(np.linalg.norm(v_bezier, axis=1),axis=0).T
 v_bezier = v_bezier / v_norm_bezier
 
+print(f'v norm bezier {v_norm_bezier.shape}, v_bezier  {v_bezier.shape}')
+
 v = np.expand_dims(haut_gauche[:2] - bas_gauche[:2], axis=0).T
 v_norm = np.linalg.norm(v)
 v = v / v_norm
-print(f'v {v}')
+# print(f'v {v}')
 P = np.matmul(v , v.T)
 
 bezier_proj = ( P @ v_bezier.T).T *v_norm_bezier + bas_gauche[:2]
@@ -277,7 +309,24 @@ arg_bezier2 = torch.argwhere(dist < radius)[:,1]
 
 
 
-_ , arg= Segmentation([haut_droite,haut_gauche,bas_gauche,bas_droite],vertex = V)
+# _ , arg= Segmentation([haut_droite,haut_gauche,bas_gauche,bas_droite],vertex = V)
+radius=0.5
+
+t = np.arange(0,1,0.01)
+haut_seg = Segment2D(haut_droite,haut_gauche)
+haut_seg = torch.tensor(haut_seg(t)).t().to(torch.float32)
+# print(haut_seg)
+dis = torch.cdist(haut_seg,V[:,:2])
+arg_haut_seg = torch.argwhere(dis < radius).squeeze()[:,1]
+print(f'arg haut seg {arg_haut_seg.shape}  seg {arg_haut_seg}')
+
+
+bas_seg = Segment2D(bas_droite,bas_gauche)
+bas_seg = torch.tensor(bas_seg(t)).t().to(torch.float32)
+dis = torch.cdist(bas_seg,V[:,:2])
+arg_bas_seg = torch.argwhere(dis < radius).squeeze()[:,1]
+
+
 
 # arg = torch.cat(list_arg,dim=0).squeeze(0)
 # print(f'arg {arg.shape}')
@@ -287,28 +336,34 @@ _ , arg= Segmentation([haut_droite,haut_gauche,bas_gauche,bas_droite],vertex = V
 
 # arg = torch.argwhere(texture1[:,1] == 2)
 texture2 = torch.zeros_like(V)
-texture2[arg,1] = 255
+texture2[arg_bas_seg,1] =255
+texture2[arg_haut_seg,1] = 255
 texture2[arg_bezier,2] =255
 texture2[arg_bezier2,2] =255
 # texture2[arg2,1] = 255
 
 V_label = torch.zeros((V.shape[0]))
-V_label[arg] = 1
+V_label[arg_bas_seg] =1
+V_label[arg_haut_seg] = 1
 V_label[arg_bezier] = 1
 V_label[arg_bezier2] = 1
 
-point = bezier[int(bezier.shape[0]/2),:].unsqueeze(0) - torch.tensor([[2,0]])
-print(f'point {point}')
-dist = torch.cdist(point,V[:,:2]).squeeze()
-min_bez = torch.argmin(dist)
-V_label = Dilation(min_bez,V,F,V_label)
+# point = bezier[int(bezier.shape[0]/2),:].unsqueeze(0) - torch.tensor([[2,0]])
+# print(f'point {point}')
+# dist = torch.cdist(point,V[:,:2]).squeeze()
+# min_bez = torch.argmin(dist)
+# V_label = Dilation(min_bez,V,F,V_label)
 
-point = bezier2[int(bezier2.shape[0]/2),:].unsqueeze(0) - torch.tensor([[-2,0]])
-print(f'point {point}')
-dist = torch.cdist(point,V[:,:2]).squeeze()
-min_bez2 = torch.argmin(dist)
-V_label = Dilation(min_bez2,V,F,V_label)
+# point = bezier2[int(bezier2.shape[0]/2),:].unsqueeze(0) - torch.tensor([[-2,0]])
+# print(f'point {point}')
+# dist = torch.cdist(point,V[:,:2]).squeeze()
+# min_bez2 = torch.argmin(dist)
+# V_label = Dilation(min_bez2,V,F,V_label)
 
+
+dist = torch.cdist(torch.tensor(middle[:2]).unsqueeze(0),V[:,:2]).squeeze()
+middle_arg = torch.argmin(dist)
+V_label = Dilation(middle_arg,V,F,V_label)
 
 V = torch.tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(torch.float32)
 F = torch.tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:]).to(torch.int64)
@@ -336,8 +391,8 @@ plt = plot_scene({
     # 'bezier' : ListToMesh(bezier,radius=0.2),
     # 'projection middle' : ListToMesh(projection),
     # 'sym':ListToMesh(sym)
-    'min1':ListToMesh(V[min_bez,:].unsqueeze(0)),
-    'min2':ListToMesh(V[min_bez2,:].unsqueeze(0)),
+    # 'min1':ListToMesh(V[min_bez,:].unsqueeze(0)),
+    # 'min2':ListToMesh(V[min_bez2,:].unsqueeze(0)),
     # 'point':ListToMesh(point)
     }
 })

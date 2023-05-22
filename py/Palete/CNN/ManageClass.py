@@ -1,3 +1,4 @@
+from typing import Any
 from torch import tensor
 import torch
 from random import choice
@@ -6,15 +7,25 @@ import numpy as np
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 from monai.transforms import ToTensor
 
-from utils import MeanScale, TransformVTK, MatrixScale, MatrixTranspose, RotationMatrix
+from utils import MeanScale, TransformVTK, MatrixScale, MatrixTranspose, RotationMatrix, TransformSurf
 import utils
 
 
 
 
 
-
-
+class RandomTranslation:
+    def __init__(self,max_translation) -> None:
+        self.max_translation = max_translation
+    def __call__(self,surf) -> Any:
+        translation = (np.random.rand(3)-0.5)* self.max_translation
+        matrix = np.array([[1,0,0,translation[0]],
+                           [0,1,0,translation[1]],
+                           [0,0,1,translation[2]]
+                           ,[0,0,0,1]])
+        
+        surf = TransformSurf(surf,matrix)
+        return surf, matrix
 
 class UnitSurfTransform:
 

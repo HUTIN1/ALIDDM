@@ -1,13 +1,13 @@
-
 import numpy as np
 import torch
 from utils import search, ReadSurf, WriteSurf
 import vtk
-from icp import PrePreAso, vtkMeanTeeth
+from icp import PrePreAso, vtkMeanTeeth, ToothNoExist
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 import sys
 import os
 from tqdm import tqdm
+import argparse
 
 fpath = '/home/luciacev/Desktop/Project/ALIDDM/ALIDDM/py/Palete/GCNnet'
 sys.path.append(fpath)
@@ -54,6 +54,25 @@ def Difference(t1,t2):
     dif = torch.unique(t2[arg])
     return dif
 
+# def Neighbours_secours(arg_point,F):
+#     divide_batch = 3
+#     len_batch = len(arg_point)
+#     arg_list = []
+#     for i in range(divide_batch):
+#         if int(len_batch/divide_batch)*(i+1) >= len_batch:
+#             arg_point_small_batch = arg_point[int(len_batch/divide_batch)*i : -1]
+#         else :
+#             arg_point_small_batch = arg_point[int(len_batch/divide_batch)*i : int(len_batch/divide_batch)*(i+1)]
+#         neighbours = torch.tensor([]).cuda()
+#         F2 = F.unsqueeze(0).expand(len(arg_point_small_batch),-1,-1)
+#         arg_point_small_batch = arg_point_small_batch.unsqueeze(1).unsqueeze(2)
+#         arg_list.append(torch.argwhere((F2-arg_point_small_batch) == 0))
+#     # print(f' arg {arg.shape}, arg : {arg}')
+#     arg = torch.cat(arg_list,dim=0)
+
+#     neighbours = torch.unique(F[arg[:,1],:])
+#     return neighbours
+
 def Neighbours(arg_point,F):
     neighbours = torch.tensor([]).cuda()
     F2 = F.unsqueeze(0).expand(len(arg_point),-1,-1)
@@ -86,47 +105,75 @@ def Dilation(arg_point,V,F,texture):
         n+=1
     return texture
 
-path = '/home/luciacev/Desktop/Data/IOSReg/Meg/CHECKONEBYONE/non_extraction_case/'
-path_out ='/home/luciacev/Desktop/Data/IOSReg/Meg/CHECKONEBYONE/patch_2_5_12_14_non_extraction_case/'
-# centroidf = vtkMeanTeeth([5,6,11,12,3,14],property='Universal_ID')
-# centroidf = vtkMeanTeeth([5,3,14,12,2,15],property='Universal_ID')
-centroidf = vtkMeanTeeth([5,12,3,14],property='Universal_ID')
-files = search(path,'.vtk')['.vtk']
-for file in tqdm(files) :
+
+
+def main(args):
+    file = args.file
+    path_out = args.folder_out
+    ratio_rect_front = args.ratio_anterior
+    ratio_rect_back = args.ratio_posterior
+    radius = args.radius_draw_line
+
     surf = ReadSurf(file)
     surf_out = vtk.vtkPolyData()
     surf_out.DeepCopy(surf)
+    # centroidf = vtkMeanTeeth([6,11,3,14],property='Universal_ID')
+    centroidf = vtkMeanTeeth([3,14,6,11,5,12],property='Universal_ID')
+
+    # centroidf = vtkMeanTeeth([2,5,12,15,6,11,3,14],property='Universal_ID')
     try :
         surf, matrix = PrePreAso(surf,[[-0.5,-0.5,0],[0,0,0],[0.5,-0.5,0]],['3','8','9','14'])
 
         centroid = centroidf(surf)
 
-    except :
-        print(f' Error with  : {file}')
-        continue
-    V = torch.tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(torch.float32)
-    # print(f'V {V.shape}')
-    F = torch.tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:]).to(torch.int64)
-    ratio_rect = 0.3
-    # haut_gauche1 = (centroid['5']+centroid['6'])/2
-    # haut_droite1 = (centroid['11']+centroid['12'])/2
-    haut_gauche1 = (centroid['5'])
-    haut_droite1 = centroid['12']
+    except ToothNoExist as error:
+        print(f' Error with  : {file} \n {error}')
+        quit()
 
-    haut_droite = (1-ratio_rect) * haut_gauche1 + ratio_rect * haut_droite1
-    haut_gauche = (1-ratio_rect) * haut_droite1 + ratio_rect * haut_gauche1
+    V = torch.tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(torch.float32)
+    F = torch.tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:]).to(torch.int64)
+    
+    ratio = 0.0
+    plus_back = -1
+    
+    # haut_gauche1 = ((1- ratio ) * centroid['5']+ ratio * centroid['6'])
+    # haut_droite1 = ((1- ratio ) * centroid['12']+ ratio * centroid['11'])
+    # haut_gauche1 = centroid['5']
+    # haut_droite1 = centroid['12']
+    haut_gauche1 = centroid['5'] + np.array([0,-plus_back,0],dtype=np.float32)
+    haut_droite1 = centroid['12'] + np.array([0,-plus_back,0],dtype=np.float32)
+    # haut_gauche1 =  ((1- ratio ) * centroid['5']+ ratio * centroid['4']) +np.array([0,-plus_back,0],dtype=np.float32)
+    # haut_droite1 = centroid['12']  + np.array([0,-plus_back,0],dtype=np.float32)
+
+        
+    # haut_gauche1 = ((1- ratio ) * centroid['5']+ ratio * centroid['6'])  +np.array([0,-plus_back  ,0],dtype=np.float32)
+    # haut_droite1 = ((1- ratio ) * centroid['12']+ ratio * centroid['11'])  +np.array([0,-plus_back ,0],dtype=np.float32)
+
+
+    ratio = 0.5
+    plus_back= 1.9
+    plus_back2 = 1
+    # bas_gauche1 = centroid['2']
+    # bas_droite1 = centroid['15']
+    bas_gauche1 = centroid['3'] + np.array([0,-plus_back,0],dtype=np.float32)
+    bas_droite1 = centroid['14']+ np.array([0,-plus_back ,0],dtype=np.float32)
+    # bas_droite1 = ((1-ratio)*centroid['14']+ratio  * centroid['15']) + np.array([0,-plus_back2,0],dtype=np.float32)
+    # bas_gauche1 = ((1-ratio)*centroid['3']+ratio * centroid['2']) + np.array([0,-plus_back2,0],dtype=np.float32)
+    # bas_droite1 = ((1-ratio)*centroid['14']+ ratio  * centroid['15']) 
+    # bas_gauche1 = ((1-ratio)*centroid['3']+ ratio * centroid['2']) 
+
+
+    ratio_rect_front = 0.31
+    haut_droite = (1-ratio_rect_front) * haut_gauche1 + ratio_rect_front * haut_droite1
+    ratio_rect_front = 0.30
+    haut_gauche = (1-ratio_rect_front) * haut_droite1 + ratio_rect_front * haut_gauche1
     haut_middle = (haut_gauche + haut_droite) / 2
 
 
-    bas_gauche1 = centroid['3']
-    bas_droite1 = centroid['14']
-    # bas_droite1 = (centroid['14']+centroid['15'])/2
-    # bas_gauche1 = (centroid['2']+centroid['3'])/2
-
-    ratio_rect = 0.33
-
-    bas_droite = (1-ratio_rect) * bas_gauche1 + ratio_rect * bas_droite1
-    bas_gauche = (1- ratio_rect) * bas_droite1 + ratio_rect * bas_gauche1
+    ratio_rect_back = 0.33
+    bas_droite = (1-ratio_rect_back) * bas_gauche1 + ratio_rect_back * bas_droite1
+    ratio_rect_back = 0.33
+    bas_gauche = (1- ratio_rect_back) * bas_droite1 + ratio_rect_back * bas_gauche1
     bas_middle = (bas_droite + bas_gauche) / 2
 
 
@@ -139,10 +186,7 @@ for file in tqdm(files) :
 
 
 
-
-
-    radius=0.6
-
+    #rectangle limit
     t = np.arange(0,1,0.01)
     haut_seg = Segment2D(haut_droite,haut_gauche)
     haut_seg = torch.tensor(haut_seg(t)).t().to(torch.float32)
@@ -179,8 +223,9 @@ for file in tqdm(files) :
 
     bezier = torch.tensor(sym,dtype=torch.float32)
     dist = torch.cdist(bezier,V[:,:2])
-    radius = 0.5
     arg_bezier = torch.argwhere(dist < radius)[:,1]
+
+
 
 
 
@@ -201,8 +246,9 @@ for file in tqdm(files) :
 
     bezier2 = torch.tensor(sym,dtype=torch.float32)
     dist = torch.cdist(bezier2,V[:,:2])
-    radius = 0.5
     arg_bezier2 = torch.argwhere(dist < radius)[:,1]
+
+
 
 
 
@@ -212,16 +258,7 @@ for file in tqdm(files) :
     V_label[arg_bezier] = 1
     V_label[arg_bezier2] = 1
 
-    # point = bezier[int(bezier.shape[0]/2),:].unsqueeze(0) - torch.tensor([[2,0]])
 
-    # dist = torch.cdist(point,V[:,:2]).squeeze()
-    # min_bez = torch.argmin(dist)
-    # V_label = Dilation(min_bez,V,F,V_label)
-
-    # point = bezier2[int(bezier2.shape[0]/2),:].unsqueeze(0) - torch.tensor([[-2,0]])
-    # dist = torch.cdist(point,V[:,:2]).squeeze()
-    # min_bez2 = torch.argmin(dist)
-    # V_label = Dilation(min_bez2,V,F,V_label)
 
     dist = torch.cdist(torch.tensor(middle[:2]).unsqueeze(0),V[:,:2]).squeeze()
     middle_arg = torch.argmin(dist)
@@ -240,3 +277,19 @@ for file in tqdm(files) :
 
     basename = os.path.basename(file)
     WriteSurf(surf_out,os.path.join(path_out,basename))
+
+
+
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--file',help='file to make patch',type=str)
+    parser.add_argument('--folder_out',type=str,default='/home/luciacev/Desktop/Data/IOSReg/Meg/CHECKONEBYONE/test/')
+    parser.add_argument('--ratio_anterior',type=float,default=0.3)
+    parser.add_argument('--ratio_posterior',type=float,default=0.33)
+    parser.add_argument('--radius_draw_line',type=float,default=0.7)
+
+    args = parser.parse_args()
+
+    main(args)

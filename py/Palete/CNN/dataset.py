@@ -6,7 +6,7 @@ import torch
 from torch import int64, float32, tensor
 from torch.nn.utils.rnn import pad_sequence
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
-
+import vtk
 from monai.transforms import (
     ToTensor
 )
@@ -31,8 +31,7 @@ from utils import(
     ComputeNormals,
     GetColorArray,
     RandomRotation,get_landmarks_position, pos_landmard2texture, pos_landmard2seg, TransformSurf,TransformRotationMatrix,RandomRotationZ,
-    pos_landmard2seg_special,pos_landmard2texture_special,pos_Tshape_texture
-)
+    pos_landmard2seg_special,pos_landmard2texture_special,pos_Tshape_texture)
 from utils2 import rectangle_patch_texture
 
 
@@ -351,6 +350,52 @@ class TeethDatasetLmCoss(Dataset):
 
 
 
+class RegistrationDataset(Dataset):
+    def __init__(self,df,surf_property ,mount_point='',transform = False,landmark=[],test=False,prediction=False,random_rotation= False):
+        self.df = df
+        self.mount_point = mount_point
+
+        self.surf_property = surf_property
+
+        self.transform = transform
+        self.landmark = landmark
+        self.test = test
+        self.prediction= prediction
+        self.random_rotation = random_rotation
+
+    def __len__(self):
+            
+        return len(self.df)
+    
+    def __getitem__(self, index):
+        surf_T1 = ReadSurf(self.df.iloc[index]['T1'])
+
+
+
+        surf_T1, matrix = PrePreAso(surf_T1,[[-0.5,-0.5,0],[0,0,0],[0.5,-0.5,0]],['3','8','9','14'])
+
+        if self.random_rotation:
+            surf_T1 , angle, vector = RandomRotationZ(surf_T1)
+            angle = angle*np.pi / 180
+            matrix_random_rotation = TransformRotationMatrix(vector, angle)
+            matrix = np.matmul(matrix_random_rotation,matrix)
+
+
+        if self.transform:
+            surf_T1, matrix_transform = self.transform(surf_T1)
+
+            matrix = np.matmul(matrix_transform,matrix)
+
+
+        surf_T2 = ReadSurf(self.df.iloc[index]['T2'])
+        surf_T2 = TransformSurf(surf_T2,matrix)
+
+
+    def decomposition(surf):
+        quit()
+
+
+        
 
 
 
@@ -469,3 +514,6 @@ class TeethDatasetPatch(Dataset):
         name , _ = os.path.splitext(name)
 
         return name
+
+
+

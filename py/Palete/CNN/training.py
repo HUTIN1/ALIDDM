@@ -10,7 +10,7 @@ import torch
 from dataset import TeethDataModuleLm
 from net import MonaiUNetHRes, MonaiUnetCosine
 from callback import TeethNetImageLoggerLm
-from ManageClass import RandomPickTeethTransform, RandomRotation,PickLandmarkTransform, MyCompose, UnitSurfTransform
+from ManageClass import RandomPickTeethTransform, RandomRotation,PickLandmarkTransform, MyCompose, UnitSurfTransform, RandomTranslation
 
 
 from pytorch_lightning import Trainer
@@ -46,7 +46,7 @@ def main(args):
     else :
         model = MonaiUNetHRes(args, out_channels = 9, class_weights=class_weights, image_size=320, train_sphere_samples=args.train_sphere_samples,radius=1.6)
 
-    train_transfrom = MyCompose([UnitSurfTransform()])
+    train_transfrom = MyCompose([UnitSurfTransform(),RandomTranslation(0.25)])
 
     teeth_data = TeethDataModuleLm(df_test=df_test, df_train=df_train, df_val=df_val,mount_point=args.mount_point,
      num_workers = 4,surf_property =args.property,batch_size=args.batch_size,

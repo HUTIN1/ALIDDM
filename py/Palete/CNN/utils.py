@@ -101,7 +101,7 @@ def ReadSurf(fileName):
 def WriteSurf(surf, fileName):
     fname, extension = os.path.splitext(fileName)
     extension = extension.lower()
-    print("Writing:", fileName)
+    # print("Writing:", fileName)
     if extension == ".vtk":
         writer = vtk.vtkPolyDataWriter()
     elif extension == ".stl":

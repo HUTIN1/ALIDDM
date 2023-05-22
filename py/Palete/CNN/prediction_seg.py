@@ -72,9 +72,10 @@ def main(args):
     gauss_filter = GaussianBlur(15)
 
     with torch.no_grad():
-
-        for idx, batch in tqdm(enumerate(dataloader), total=len(dataloader)):
+        pbar = tqdm(enumerate(dataloader), total=len(dataloader), desc='Segment Palete')
+        for idx, batch in pbar:
             name = ds.getName(idx)
+            pbar.set_description(name)
 
             V, F, CN = batch
 
@@ -86,9 +87,9 @@ def main(args):
             x, X, PF = model((V, F, CN))
             x = softmax(x*(PF>=0))
 
-            x = torch.argmax(x,dim=2)
+            # x = torch.argmax(x,dim=2)
 
-            x = torch.where(gauss_filter(x) > 0.7,1,0) 
+            # x = torch.where(gauss_filter(x) > 0.7,1,0) 
 
 
             # print(f'x shape {x.shape} ,unique {torch.unique(x)}')
@@ -96,7 +97,7 @@ def main(args):
             # quit()
 
             P_faces = torch.zeros(out_channels, F.shape[1]).to(device)
-            P_faces = torch.zeros(F.shape[1]).to(device).to(torch.int64)
+            # P_faces = torch.zeros(F.shape[1]).to(device).to(torch.int64)
             V_labels_prediction = torch.zeros(V.shape[1]).to(device).to(torch.int64)
 
             PF = PF.squeeze()
@@ -106,12 +107,12 @@ def main(args):
 
             # print(f'PF : {PF.shape}, x : {x.shape}, P_faces : {P_faces.shape}, V_labels_prediction { V_labels_prediction.shape}')
 
-            # for pf, pred in zip(PF, x):
-            #     # P_faces[:, pf] += pred
-            #     P_faces[pf] += pred
-            P_faces[PF] = x
+            for pf, pred in zip(PF, x):
+                P_faces[:, pf] += pred
+                # P_faces[pf] += pred
+            # P_faces[PF] = x
 
-            # P_faces = torch.argmax(P_faces, dim=0)
+            P_faces = torch.argmax(P_faces, dim=0)
 
             faces_pid0 = F[0,:,0]
             # print(f'shape face pid0 {faces_pid0.shape}, P_faces : {P_faces.shape}')
@@ -123,7 +124,7 @@ def main(args):
             V_labels_prediction = torch.where(V_labels_prediction >= 1, 1, 0)
 
             V_labels_prediction = numpy_to_vtk(V_labels_prediction.cpu().numpy())
-            V_labels_prediction.SetName('Palete_gauss')
+            V_labels_prediction.SetName('Palete')
             surf.GetPointData().AddArray(V_labels_prediction)
 
             # WriteSurf(surf,os.path.join(args.out,f'{name}_palete.vtk'))
@@ -151,10 +152,10 @@ if __name__ == '__main__':
 
 
     parser = argparse.ArgumentParser(description='Teeth challenge prediction')
-    parser.add_argument('--input',help='path folder',type=str,default='/home/luciacev/Desktop/Data/IOSReg/ARON_GOLD/organize/test/test/')      
-    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Downloads/['L3RM', 'R3RM']epoch=1085-val_loss=0.365_unetseg_butterflies.ckpt")
+    parser.add_argument('--input',help='path folder',type=str,default='/home/luciacev/Desktop/Data/IOSReg/Aron_Meg/Original/')      
+    parser.add_argument('--model', help='Model to continue training', type=str, default="/home/luciacev/Downloads/['L3RM', 'R3RM']epoch=951-val_loss=0.471_unetseg_butterfly_Aron_create_patch_manually.ckpt")
     parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
-    parser.add_argument('--out', help='Output', type=str, default='/home/luciacev/Desktop/Data/IOSReg/ARON_GOLD/organize/test/test/')
+    parser.add_argument('--out', help='Output', type=str, default='/home/luciacev/Desktop/Data/IOSReg/Aron_Meg/Patched/NN_createPatch_from_patchcreatemanually/')
     parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="/home/luciacev/Desktop/Data/ALI_IOS/landmark/Prediction/Data/Palete/Aron/json2/")
     parser.add_argument('--array_name',type=str, help = 'Predicted ID array name for output vtk', default="Universal_ID")
     parser.add_argument('--landmark',default='L2RM')

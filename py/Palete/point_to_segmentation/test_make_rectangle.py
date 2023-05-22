@@ -106,8 +106,8 @@ def Dilation(arg_point,V,F,texture):
     dif = neighbour.to(torch.int64)
     dif = Difference(arg_texture,dif)
     n = 0
-    while len(dif)!= 0 and n < 80:
-        print(f'n = {n}, len : {len(dif)}')
+    while len(dif)!= 0 :
+        # print(f'n = {n}, len : {len(dif)}')
         texture[dif] = 1
         neighbour = Neighbours(dif,F)
         arg_texture = torch.argwhere(texture == 1).squeeze()
@@ -119,7 +119,7 @@ def Dilation(arg_point,V,F,texture):
 
     
 
-path = '/home/luciacev/Desktop/Data/IOSReg/ARON_GOLD/organize/my_register/my_register_rectangle/A1_UpperT2reg.vtk'
+path = '/home/luciacev/Desktop/Data/IOSReg/ARON_GOLD/organize/test/input/A4_UpperT2.vtk'
 path_out = '/home/luciacev/Desktop/Data/IOSReg/ARON_GOLD/organize/test/test/'
 surf = ReadSurf(path)
 surf_out = vtk.vtkPolyData()
@@ -129,23 +129,35 @@ surf, matrix = PrePreAso(surf,[[-0.5,-0.5,0],[0,0,0],[0.5,-0.5,0]],['3','8','9',
 # surf, _ ,_ = RandomRotation(surf)
 
 
-centroid = vtkMeanTeeth([5,6,11,12,3,14],property='Universal_ID')
+centroid = vtkMeanTeeth([5,12,2,15,6,11,3,14],property='Universal_ID')
 centroid = centroid(surf)
 V = torch.tensor(vtk_to_numpy(surf.GetPoints().GetData())).to(torch.float32)
 print(f'V {V.shape}')
 F = torch.tensor(vtk_to_numpy(surf.GetPolys().GetData()).reshape(-1, 4)[:,1:]).to(torch.int64)
+# ratio_rect = 0.28
 ratio_rect = 0.3
-haut_gauche1 = (centroid['5']+centroid['6'])/2
-haut_droite1 = (centroid['11']+centroid['12'])/2
+# haut_gauche1 = (centroid['5']+centroid['6'])/2
+# haut_droite1 = (centroid['11']+centroid['12'])/2
+haut_droite1 = centroid['12']
+haut_gauche1 = centroid['5']
 
 haut_droite = (1-ratio_rect) * haut_gauche1 + ratio_rect * haut_droite1
 haut_gauche = (1-ratio_rect) * haut_droite1 + ratio_rect * haut_gauche1
 haut_middle = (haut_gauche + haut_droite) / 2
 
 
-bas_gauche1 = centroid['3']
-bas_droite1 = centroid['14']
+# bas_gauche1 = centroid['3']
+# bas_droite1 = centroid['14']
 
+# bas_gauche1 = centroid['2']
+# bas_droite1 = centroid['15']
+
+ratio_bas = 0.25
+bas_gauche1 = ((1-ratio_bas) * centroid['3'] + ratio_bas * centroid['2'])
+bas_droite1 = ((1-ratio_bas) * centroid['14']+ ratio_bas * centroid['15'])
+
+# ratio_rect = 0.35
+ratio_rect =0.3
 bas_droite = (1-ratio_rect) * bas_gauche1 + ratio_rect * bas_droite1
 bas_gauche = (1- ratio_rect) * bas_droite1 + ratio_rect * bas_gauche1
 bas_middle = (bas_droite + bas_gauche) / 2
@@ -235,6 +247,7 @@ arg2 = torch.argwhere(distance < radius).squeeze()
 
 # bezier = Bezier_bled(haut_gauche,middle,bas_gauche,0.01)
 bezier = Bezier_bled(bas_gauche[:2],bas_middle[:2],haut_gauche[:2],0.01)
+# bezier = Bezier_bled(bas_gauche[:2],haut_middle[:2],haut_gauche[:2],0.01)
 v_bezier = bezier - np.expand_dims(bas_gauche[:2],axis=0)
 v_norm_bezier = np.expand_dims(np.linalg.norm(v_bezier, axis=1),axis=0).T
 v_bezier = v_bezier / v_norm_bezier
@@ -252,7 +265,7 @@ sym = 2*bezier_proj - bezier
 
 bezier = torch.tensor(sym,dtype=torch.float32)
 dist = torch.cdist(bezier,V[:,:2])
-radius = 0.4
+radius = 0.5
 arg_bezier = torch.argwhere(dist < radius)[:,1]
 
 
@@ -274,7 +287,7 @@ sym = 2*bezier_proj - bezier2
 
 bezier2 = torch.tensor(sym,dtype=torch.float32)
 dist = torch.cdist(bezier2,V[:,:2])
-radius = 0.4
+radius = 0.5
 arg_bezier2 = torch.argwhere(dist < radius)[:,1]
 
 
